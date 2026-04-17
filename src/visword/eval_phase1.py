@@ -1,18 +1,24 @@
 """Phase-1 recall: same-page non-overlapping-crop retrieval (PROJECT_SPEC.md §7).
 
-Used two ways:
-  * ``phase1_recall(model, dataset, k_values)`` — library entry called
-    mid-training by ``visword.train`` for eval_every (Phase C).
-  * ``main()`` — CLI that loads a checkpoint, runs the full eval against
-    the Phase-1 held-out set, and writes ``phase1_recall.json`` into the
-    run directory per the §7 schema (Phase D; skeleton here).
+Two entry points:
+
+* ``phase1_recall(model, dataset, k_values)`` — library API called
+  mid-training by ``visword.train`` (Phase C, eval_every cadence).
+* ``main()`` — CLI that loads a checkpoint from a run dir, reconstructs
+  the same eval split, runs the full protocol, and writes
+  ``phase1_recall.json`` into that run dir per the §7 schema.
+
+**Decoupling.** This module must not import ``visword.train`` (TESTS.md
+D3). Keep the run-dir / dataset / model plumbing local.
 
 Protocol:
-  * For each page in the eval set, generate all non-overlapping crops.
+  * For each page in the eval set, generate all non-overlapping crops
+    (``min_text_ratio=0`` so every tile counts).
   * Encode every crop into the model's descriptor space.
-  * For each crop as a query, rank every *other* crop by cosine similarity;
-    the query is "recalled at K" iff at least one same-page crop lies in
-    the top K. Mean over all queries.
+  * For each crop as a query, rank every *other* crop by cosine
+    similarity; recall@K is the fraction of queries with at least one
+    same-page crop in the top K (only queries that have a same-page
+    partner are counted).
 """
 from __future__ import annotations
 
@@ -20,8 +26,13 @@ import argparse
 import json
 from pathlib import Path
 
+import numpy as np
 import torch
+import yaml
 
+from visword.config import Config
+from visword.data import manifest as M
+from visword.data.cropper import NonOverlappingCropper
 from visword.data.light_dataset import LightWikiScreenshotDataset
 
 
@@ -133,8 +144,100 @@ def phase1_recall(
 
 
 # ---------------------------------------------------------------------------
-# CLI — fleshed out in Phase D; for Phase C we only need the library API.
+# CLI (Phase D)
 # ---------------------------------------------------------------------------
+
+
+def _load_cfg(run_dir: Path) -> Config:
+    cfg_path = run_dir / "config.resolved.yaml"
+    if not cfg_path.exists():
+        raise SystemExit(f"missing {cfg_path} — did training finish?")
+    return Config.model_validate(yaml.safe_load(cfg_path.read_text()))
+
+
+def _rebuild_eval_dataset(cfg: Config) -> LightWikiScreenshotDataset:
+    """Rebuild the exact same eval split train.py used.
+
+    ``train.py`` picks ``num_train_samples`` + ``num_eval_samples`` rows from a
+    ``numpy.Generator(seed)``'s permutation; we replay that here. Must stay
+    in sync with ``visword.train._split_indices``.
+    """
+    cache_dir = Path(cfg.data.wiki_ss_cache_dir)
+    manifest = M.read_manifest(cache_dir)
+    num_rows = manifest["num_rows"]
+    n_train, n_eval = cfg.data.num_train_samples, cfg.data.num_eval_samples
+    if n_train + n_eval > num_rows:
+        raise SystemExit(
+            f"cache has {num_rows} rows but config wants "
+            f"{n_train}+{n_eval} — re-prefetch or adjust config"
+        )
+    perm = np.random.default_rng(cfg.train.seed).permutation(num_rows)
+    eval_idx = perm[n_train : n_train + n_eval].tolist()
+
+    eval_cropper = NonOverlappingCropper(
+        crop_size=cfg.cropper.crop_size,
+        overlap=cfg.cropper.overlap,
+        min_text_ratio=0.0,                           # keep every tile for eval
+        target_size=cfg.cropper.target_size,
+    )
+    return LightWikiScreenshotDataset(
+        cache_dir,
+        indices=eval_idx,
+        cropper=eval_cropper,
+        k_per_page=2,
+        seed=cfg.train.seed + 1,
+    )
+
+
+def _build_model_from_cfg(cfg: Config) -> torch.nn.Module:
+    """Local model factory — avoids importing visword.train (TESTS.md D3)."""
+    if cfg.model_kind == "salad":
+        from visword.models.dinov2_salad import DINOv2SALAD
+        return DINOv2SALAD(cfg)
+    from visword.models.dinov2_cls import DINOv2CLS
+    return DINOv2CLS(cfg)
+
+
+def _load_checkpoint(model: torch.nn.Module, ckpt_path: Path, device: torch.device) -> dict:
+    """Load model state_dict from a train.py-style checkpoint."""
+    blob = torch.load(ckpt_path, map_location=device)
+    state = blob.get("model_state_dict", blob)
+    model.load_state_dict(state)
+    model.to(device)
+    model.eval()
+    return blob
+
+
+def run_phase1_cli(
+    run_dir: Path, *, checkpoint: str = "best_phase1.pt",
+) -> dict:
+    """Execute the §7 Phase-1 recall protocol, write phase1_recall.json, return it."""
+    run_dir = run_dir.resolve()
+    cfg = _load_cfg(run_dir)
+    ckpt_path = run_dir / "checkpoints" / checkpoint
+    if not ckpt_path.exists():
+        raise SystemExit(f"no checkpoint at {ckpt_path}. Run training first.")
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    eval_ds = _rebuild_eval_dataset(cfg)
+    model = _build_model_from_cfg(cfg)
+    blob = _load_checkpoint(model, ckpt_path, device)
+
+    result = phase1_recall(model, eval_ds, k_values=cfg.eval.k_values, device=device)
+    payload = {
+        "checkpoint": str(ckpt_path.relative_to(run_dir.parent.parent)
+                          if run_dir.parent.parent in ckpt_path.parents
+                          else ckpt_path),
+        "checkpoint_step": blob.get("step"),
+        "num_pages_evaluated": result["num_pages"],
+        "num_crops": result["num_crops"],
+        "recall": result["recall"],
+        "sanity": result["sanity"],
+    }
+    out_path = run_dir / "phase1_recall.json"
+    out_path.write_text(json.dumps(payload, indent=2))
+    return payload
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -143,18 +246,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--checkpoint", default="best_phase1.pt",
                    help="filename under <run-dir>/checkpoints/")
     args = p.parse_args(argv)
-
-    run_dir = args.run_dir.resolve()
-    ckpt = run_dir / "checkpoints" / args.checkpoint
-    if not ckpt.exists():
-        raise SystemExit(f"no checkpoint at {ckpt}. Phase D will populate this.")
-
-    # Full Phase-1 protocol lands in Phase D (ref to PROJECT_SPEC.md §7).
-    # For now, fail loudly rather than fake a number — CONTEXT.md session-2 lesson.
-    raise SystemExit(
-        "Full eval_phase1 CLI arrives in Phase D. "
-        "Phase C only exposes the phase1_recall(model, dataset, ...) library API."
-    )
+    payload = run_phase1_cli(args.run_dir, checkpoint=args.checkpoint)
+    print(json.dumps(payload, indent=2))
+    return 0
 
 
 if __name__ == "__main__":

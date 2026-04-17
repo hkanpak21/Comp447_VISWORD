@@ -16,7 +16,7 @@ if not torch.cuda.is_available():
     pytest.skip("CUDA required", allow_module_level=True)
 
 
-from tests.test_train_debug import debug_run  # noqa: F401 (fixture import)
+# debug_run fixture is auto-loaded from tests/conftest.py (session-scoped).
 
 
 SPEC_SECTION_11_FILES = [
