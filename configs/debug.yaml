@@ -1,0 +1,17 @@
+# Tiny config for fast end-to-end smoke tests (CI / dry runs).
+# Inherits from default.yaml; only the diffs below are applied.
+
+experiment_name: visword-debug
+
+data:
+  num_train_samples: 500
+  num_eval_samples: 50
+
+train:
+  epochs: 1
+  batch_size: 8
+  k_per_page: 2
+
+eval:
+  phase1_max_pages: 50
+  phase2_max_queries: 20

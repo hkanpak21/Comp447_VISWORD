@@ -1,0 +1,46 @@
+# Base config for all experiments. Named configs (salad_main.yaml, etc.)
+# inherit these defaults via scripts/resolve_config.py.
+
+experiment_name: visword-default
+model_kind: salad
+
+data:
+  wiki_ss_cache_dir: ${DATA_DIR}/wiki_ss
+  anchors_cache_dir: ${DATA_DIR}/wiki_ss_anchors
+  num_train_samples: 10000
+  num_eval_samples: 1000
+
+cropper:
+  crop_size: 490
+  overlap: 0.0
+  min_text_ratio: 0.05
+  target_size: 224
+
+backbone:
+  arch: dinov2_vitb14
+  num_trainable_blocks: 4
+  feature_dim: 768
+
+salad:
+  num_clusters: 64
+  cluster_dim: 128
+  token_dim: 256
+  sinkhorn_iters: 3
+
+train:
+  loss: multisim
+  temperature: 0.07
+  k_per_page: 4
+  batch_size: 32
+  epochs: 3
+  lr_backbone: 1.0e-5
+  lr_head: 5.0e-4
+  weight_decay: 1.0e-4
+  warmup_ratio: 0.05
+  grad_clip: 1.0
+  seed: 42
+
+eval:
+  k_values: [1, 5, 10, 20]
+  phase1_max_pages: 500
+  phase2_max_queries: 200
