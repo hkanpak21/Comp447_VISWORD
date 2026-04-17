@@ -128,6 +128,50 @@ def _build_model(cfg: Config) -> torch.nn.Module:
     return DINOv2CLS(cfg)
 
 
+class _DustbinTracker:
+    """Forward-hook wrapper that reports the SALAD dustbin mass per step.
+
+    Registers once on the aggregator's ``score`` submodule (discovered by
+    shape). On each forward we cache the score logits; ``last_value`` then
+    runs the Sinkhorn step on demand (cheap — 3 iterations on a
+    (B, num_clusters, H*W) tensor) and returns the dustbin fraction.
+    """
+
+    def __init__(self, model: torch.nn.Module, cfg: Config) -> None:
+        from visword.interpret.salad_internals import (
+            discover_salad_submodules,
+            dustbin_mass_fraction,
+            sinkhorn_assignment,
+        )
+        self._dustbin_fn = dustbin_mass_fraction
+        self._sinkhorn_fn = sinkhorn_assignment
+
+        aggregator = model.aggregator
+        hooks = discover_salad_submodules(
+            aggregator,
+            num_channels=cfg.backbone.feature_dim,
+        )
+        target = dict(aggregator.named_modules())[hooks.score]
+        self._aggregator = aggregator
+        self._last_score: torch.Tensor | None = None
+
+        def _capture(_m, _inp, out):
+            self._last_score = out.detach()
+
+        self._handle = target.register_forward_hook(_capture)
+
+    @property
+    def last_value(self) -> float | None:
+        if self._last_score is None:
+            return None
+        assignment = self._sinkhorn_fn(self._last_score, self._aggregator.dust_bin)
+        return self._dustbin_fn(assignment)
+
+    def close(self) -> None:
+        self._handle.remove()
+        self._last_score = None
+
+
 def _build_loss(cfg: Config) -> torch.nn.Module:
     if cfg.train.loss == "infonce":
         return build_loss("infonce", temperature=cfg.train.temperature)
@@ -271,6 +315,7 @@ def main(argv: list[str] | None = None) -> int:
     # ---- Model, loss, optimizer, schedule --------------------------------
     model = _build_model(cfg).to(device)
     loss_fn = _build_loss(cfg)
+    dustbin_tracker = _DustbinTracker(model, cfg) if cfg.model_kind == "salad" else None
 
     groups = _param_groups(model, cfg)
     optim = torch.optim.AdamW(
@@ -325,7 +370,7 @@ def main(argv: list[str] | None = None) -> int:
                     stats = compute_batch_stats(z.detach(), lbls)
                     top1 = _top1_acc(z.detach(), lbls)
 
-                logger.log({
+                row = {
                     "step": global_step,
                     "epoch": epoch,
                     "loss": float(loss.detach()),
@@ -336,7 +381,12 @@ def main(argv: list[str] | None = None) -> int:
                     "lr_head": float(optim.param_groups[1]["lr"]),
                     "gpu_mem_gb": _gpu_mem_gb(),
                     "wall_time_s": round(time.time() - t_start, 2),
-                })
+                }
+                if dustbin_tracker is not None:
+                    db = dustbin_tracker.last_value
+                    if db is not None:
+                        row["dustbin_mass"] = db
+                logger.log(row)
 
                 sys.stdout.write(
                     f"\rstep {global_step}/{total_steps}  loss {float(loss):.4f}  "
@@ -369,6 +419,8 @@ def main(argv: list[str] | None = None) -> int:
                    model, step=global_step, recall10=r10)
 
     finally:
+        if dustbin_tracker is not None:
+            dustbin_tracker.close()
         logger.close()
 
     # ---- Final plot ------------------------------------------------------
