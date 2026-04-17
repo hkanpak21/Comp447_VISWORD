@@ -39,6 +39,8 @@ train:
   warmup_ratio: 0.05
   grad_clip: 1.0
   seed: 42
+  eval_every_steps: 100
+  num_diag_batches: 3
 
 eval:
   k_values: [1, 5, 10, 20]

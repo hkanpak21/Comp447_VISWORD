@@ -35,7 +35,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-DEFAULT_COMMIT = "e1277af2bb80e1fae53751d38b1eb6a4ce9b48ed"   # pre-PEP-604 on facebookresearch/dinov2 main
+DEFAULT_COMMIT = "e1277af2ba9496fbadf7aec6eba56e8d882d1e35"   # pre-PEP-604 on facebookresearch/dinov2 main
 REMOTE = "https://github.com/facebookresearch/dinov2"
 HUB_CACHE = Path.home() / ".cache" / "torch" / "hub" / "facebookresearch_dinov2_main"
 

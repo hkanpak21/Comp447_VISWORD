@@ -56,6 +56,8 @@ class TrainConfig(_Strict):
     warmup_ratio: float = 0.05
     grad_clip: float = 1.0
     seed: int = 42
+    eval_every_steps: int = 100
+    num_diag_batches: int = 3
 
 
 class EvalConfig(_Strict):
