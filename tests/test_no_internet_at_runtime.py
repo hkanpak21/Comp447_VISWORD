@@ -60,7 +60,7 @@ def test_training_completes_with_socket_raise(tmp_path):
         "--runs-root", str(runs_root),
         "--run-name", "no-internet",
         "--set", "data.num_train_samples=16",
-        "--set", "data.num_eval_samples=4",
+        "--set", "data.num_eval_samples=10",        # need enough crops for recall@20 topk
         "--set", "train.batch_size=4",
         "--set", "train.k_per_page=2",
         "--set", "train.epochs=1",

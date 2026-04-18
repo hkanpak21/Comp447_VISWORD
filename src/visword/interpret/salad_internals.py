@@ -56,14 +56,25 @@ def discover_salad_submodules(
     num_channels: int,
     H: int = 16,
     W: int = 16,
-    device: torch.device | str = "cpu",
+    device: torch.device | str | None = None,
 ) -> SaladHooks:
     """Run one forward on dummy inputs and identify the three submodules by shape.
 
     Does not require a GPU. The aggregator weights are used as-is; we only
-    care about per-submodule output shapes.
+    care about per-submodule output shapes. When ``device`` is ``None``
+    (the default), we respect the aggregator's current device and do NOT
+    move it — important when this helper is called from the training path
+    after the model has already been moved to CUDA.
     """
-    aggregator = aggregator.to(device).eval()
+    if device is None:
+        try:
+            device = next(aggregator.parameters()).device
+        except StopIteration:
+            device = torch.device("cpu")
+    else:
+        aggregator = aggregator.to(device)
+    aggregator.eval()
+
     num_clusters = aggregator.num_clusters
     cluster_dim = aggregator.cluster_dim
     token_dim = aggregator.token_dim

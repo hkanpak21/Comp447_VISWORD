@@ -104,7 +104,10 @@ def compute_recall_at_k(
 
     recall: dict[str, float] = {}
     for k in sorted(k_values):
-        topk_idx = sim.topk(k, dim=1).indices                 # (N, k)
+        # Clamp k when the pool is smaller than k (common in debug eval splits).
+        # In that regime recall@k effectively equals recall@(n-1).
+        k_eff = min(k, max(1, n - 1))
+        topk_idx = sim.topk(k_eff, dim=1).indices             # (N, k_eff)
         topk_same = same_mask.gather(1, topk_idx)
         # Only count queries that have at least one non-self same-page neighbour.
         eligible = (same_mask & ~torch.eye(n, dtype=torch.bool)).any(dim=1)
