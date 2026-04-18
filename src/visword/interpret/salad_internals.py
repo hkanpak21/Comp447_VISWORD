@@ -205,6 +205,60 @@ def dustbin_mass_fraction(assignment: torch.Tensor) -> float:
     return float(assignment[:, -1, :].sum() / total)
 
 
+# ---------------------------------------------------------------------------
+# Cluster / dustbin heatmap rendering
+# ---------------------------------------------------------------------------
+
+
+def _per_patch_matrix(assignment: torch.Tensor, side: int, *, row: int | str) -> torch.Tensor:
+    """Extract a ``(side, side)`` mass matrix from an assignment tensor.
+
+    Args:
+        assignment: ``(1, num_clusters + 1, H*W)`` from :func:`sinkhorn_assignment`.
+        side: patch grid side length.
+        row: ``"dustbin"`` or an int in [0, num_clusters-1].
+    """
+    idx = assignment.shape[1] - 1 if row == "dustbin" else int(row)
+    vec = assignment[0, idx, :].detach()     # (H*W,) — drop grad for numpy view
+    return vec.reshape(side, side)
+
+
+def render_cluster_heatmap(
+    pil_crop,
+    assignment: torch.Tensor,
+    side: int,
+    *,
+    row: int | str,
+    out_path,
+    title: str | None = None,
+):
+    """Overlay a single cluster row (or dustbin) of the Sinkhorn assignment."""
+    import matplotlib
+
+    matplotlib.use("Agg", force=True)
+    import matplotlib.pyplot as plt
+    import numpy as np
+    from pathlib import Path
+
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    mass = _per_patch_matrix(assignment, side, row=row).cpu().numpy()
+    # Nearest-neighbour upsample to image resolution for the overlay.
+    ratio = (pil_crop.height // side, pil_crop.width // side)
+    upsampled = np.kron(mass, np.ones(ratio))
+
+    fig, ax = plt.subplots(figsize=(4, 4), constrained_layout=True)
+    ax.imshow(pil_crop)
+    ax.imshow(upsampled, cmap="magma", alpha=0.55,
+              vmin=0, vmax=max(float(upsampled.max()), 1e-9))
+    ax.set_axis_off()
+    ax.set_title(title or (f"dustbin mass" if row == "dustbin" else f"cluster {row} mass"),
+                 fontsize=9)
+    fig.savefig(out_path, dpi=140)
+    plt.close(fig)
+    return out_path
+
+
 __all__ = [
     "SaladHooks",
     "capture_score_tensor",

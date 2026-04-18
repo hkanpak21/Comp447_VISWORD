@@ -1,0 +1,29 @@
+# Smoke-scale SALAD run — sized to fit a single t4_ai walltime cap (8h) for
+# prefetch + train + eval on a 5000-row cache. Produces the first real
+# science artefacts (phase1_recall.json, phase2_recall.json, interpret/*)
+# without tying the cluster up for the spec-default 21k overnight.
+#
+# Usage:
+#   scripts/submit.sh full configs/salad_smoke.yaml 5000
+
+experiment_name: visword-salad-smoke
+model_kind: salad
+
+data:
+  num_train_samples: 4000
+  num_eval_samples: 800
+
+train:
+  loss: multisim
+  k_per_page: 4
+  batch_size: 16               # flattened B*K = 64 crops per step on a T4
+  epochs: 2
+  lr_backbone: 1.0e-5
+  lr_head: 5.0e-4
+  eval_every_steps: 100
+  num_diag_batches: 3
+
+eval:
+  k_values: [1, 5, 10, 20]
+  phase1_max_pages: 400
+  phase2_max_queries: 200

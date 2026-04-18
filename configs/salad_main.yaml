@@ -1,0 +1,28 @@
+# Spec-default SALAD main config (PROJECT_SPEC.md §2, §6).
+#
+# Sized for a 21k-row cache — does not fit in a single t4_ai 8h walltime
+# cap. Use `v100_ai` / `ai` (uncapped) if your QoS allows, or split into
+# a prefetch job + a checkpoint-every-eval training chain.
+#
+# Usage:
+#   scripts/submit.sh full configs/salad_main.yaml 21000
+
+experiment_name: visword-salad-main
+model_kind: salad
+
+data:
+  num_train_samples: 10000
+  num_eval_samples: 1000
+
+train:
+  loss: multisim
+  k_per_page: 4
+  batch_size: 32
+  epochs: 3
+  lr_backbone: 1.0e-5
+  lr_head: 5.0e-4
+  eval_every_steps: 200
+  num_diag_batches: 3
+
+eval:
+  k_values: [1, 5, 10, 20]
