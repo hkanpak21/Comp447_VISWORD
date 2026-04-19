@@ -16,11 +16,18 @@ set -euo pipefail
 # shellcheck source=scripts/_env.sh
 source /scratch/hkanpak21/VISWORD/scripts/_env.sh
 
-export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
+# Pin the DINOv2 hub cache to the Py3.9-compatible commit (idempotent).
+python /scratch/hkanpak21/VISWORD/scripts/ensure_dinov2_hub.py || true
+
+export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 HF_DATASETS_OFFLINE=1
 
 CONFIG="${CONFIG:-configs/salad_main.yaml}"
+RUN_NAME="${RUN_NAME:-}"
 
-# Training entry-point lands in Phase B. This stub exists so Phase A's layout
-# is complete and `submit.sh train` is wire-able today.
-echo "TODO(PhaseB): python -u -m visword.train --config $CONFIG $*"
-echo "SLURM script OK; exiting 0 until Phase B lands."
+EXTRA_ARGS=()
+if [ -n "$RUN_NAME" ]; then
+    EXTRA_ARGS+=(--run-name "$RUN_NAME")
+fi
+
+cd /scratch/hkanpak21/VISWORD
+PYTHONPATH=src python -u -m visword.train --config "$CONFIG" "${EXTRA_ARGS[@]}" "$@"
