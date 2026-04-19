@@ -315,7 +315,11 @@ def main(argv: list[str] | None = None) -> int:
     # ---- Model, loss, optimizer, schedule --------------------------------
     model = _build_model(cfg).to(device)
     loss_fn = _build_loss(cfg)
-    dustbin_tracker = _DustbinTracker(model, cfg) if cfg.model_kind == "salad" else None
+    # Dustbin tracker only meaningful when Sinkhorn-OT is in the forward path.
+    # token_only never invokes the score module → discovery would fail.
+    # softmax_assign skips Sinkhorn → the metric would be misleading.
+    _dustbin_compatible = cfg.model_kind == "salad" and cfg.salad.ablation in {"full", "vlad_only"}
+    dustbin_tracker = _DustbinTracker(model, cfg) if _dustbin_compatible else None
 
     groups = _param_groups(model, cfg)
     optim = torch.optim.AdamW(
