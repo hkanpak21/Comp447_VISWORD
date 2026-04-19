@@ -11,7 +11,7 @@ data:
 train:
   loss: multisim
   k_per_page: 4
-  batch_size: 32
+  batch_size: 16  # match SALAD's bs (T4 OOM at 32) for apples-to-apples
   epochs: 3
   lr_backbone: 1.0e-5
   lr_head: 5.0e-4

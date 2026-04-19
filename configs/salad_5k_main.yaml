@@ -20,7 +20,7 @@ data:
 train:
   loss: multisim
   k_per_page: 4
-  batch_size: 32
+  batch_size: 16  # bs=32 OOMs on T4 16GB for SALAD-full; matched against CLS
   epochs: 3
   lr_backbone: 1.0e-5
   lr_head: 5.0e-4
