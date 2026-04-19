@@ -128,6 +128,46 @@ def _build_model(cfg: Config) -> torch.nn.Module:
     return DINOv2CLS(cfg)
 
 
+def _find_score_submodule(aggregator: torch.nn.Module, *, num_clusters: int):
+    """Run one forward and return the leaf module whose output is (1, K, H, W).
+
+    Tolerates ablations that skip parts of the aggregator: only the score
+    module needs to fire (which is true for full and vlad_only).
+    """
+    device = next(aggregator.parameters()).device
+    H = W = 16
+    C = aggregator.num_channels
+    captured: dict[str, tuple[int, ...]] = {}
+    handles = []
+
+    def _make_hook(name):
+        def _h(_m, _inp, out):
+            if isinstance(out, torch.Tensor):
+                captured[name] = tuple(out.shape)
+        return _h
+
+    for name, module in aggregator.named_modules():
+        if not name or any(True for _ in module.children()):
+            continue
+        handles.append(module.register_forward_hook(_make_hook(name)))
+    try:
+        with torch.no_grad():
+            aggregator((torch.zeros(1, C, H, W, device=device),
+                        torch.zeros(1, C, device=device)))
+    finally:
+        for h in handles:
+            h.remove()
+
+    want = (1, num_clusters, H, W)
+    candidates = [n for n, s in captured.items() if s == want]
+    if not candidates:
+        raise RuntimeError(
+            f"_find_score_submodule: no submodule produced shape {want}; got {captured}"
+        )
+    name = max(candidates, key=len)
+    return dict(aggregator.named_modules())[name]
+
+
 class _DustbinTracker:
     """Forward-hook wrapper that reports the SALAD dustbin mass per step.
 
@@ -139,7 +179,6 @@ class _DustbinTracker:
 
     def __init__(self, model: torch.nn.Module, cfg: Config) -> None:
         from visword.interpret.salad_internals import (
-            discover_salad_submodules,
             dustbin_mass_fraction,
             sinkhorn_assignment,
         )
@@ -147,11 +186,12 @@ class _DustbinTracker:
         self._sinkhorn_fn = sinkhorn_assignment
 
         aggregator = model.aggregator
-        hooks = discover_salad_submodules(
-            aggregator,
-            num_channels=cfg.backbone.feature_dim,
-        )
-        target = dict(aggregator.named_modules())[hooks.score]
+        # Find the score-producing leaf module by output shape. We don't reuse
+        # discover_salad_submodules() because that helper requires *all three*
+        # SALAD submodules to fire during discovery, which the vlad_only
+        # ablation breaks (token_features is never invoked). The tracker only
+        # needs the score module.
+        target = _find_score_submodule(aggregator, num_clusters=cfg.salad.num_clusters)
         self._aggregator = aggregator
         self._last_score: torch.Tensor | None = None
 
