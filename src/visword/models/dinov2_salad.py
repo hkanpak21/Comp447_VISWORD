@@ -12,7 +12,8 @@ import torch
 import torch.nn as nn
 
 from visword.config import Config
-from visword.models.salad_bridge import OfficialDINOv2, OfficialSALAD
+from visword.models.salad_ablations import AblatedSALAD, descriptor_dim_for
+from visword.models.salad_bridge import OfficialDINOv2, OfficialSALAD  # noqa: F401
 
 
 def _freeze_frozen_backbone_blocks(backbone: OfficialDINOv2, num_trainable: int) -> None:
@@ -63,16 +64,23 @@ class DINOv2SALAD(nn.Module):
         )
         _freeze_frozen_backbone_blocks(self.backbone, cfg.backbone.num_trainable_blocks)
 
-        self.aggregator = OfficialSALAD(
+        self.aggregator = AblatedSALAD(
             num_channels=cfg.backbone.feature_dim,
             num_clusters=cfg.salad.num_clusters,
             cluster_dim=cfg.salad.cluster_dim,
             token_dim=cfg.salad.token_dim,
+            ablation=cfg.salad.ablation,
+            sinkhorn_iters=cfg.salad.sinkhorn_iters,
         )
 
     @property
     def descriptor_dim(self) -> int:
-        return self.cfg.salad.num_clusters * self.cfg.salad.cluster_dim + self.cfg.salad.token_dim
+        return descriptor_dim_for(
+            self.cfg.salad.ablation,
+            self.cfg.salad.num_clusters,
+            self.cfg.salad.cluster_dim,
+            self.cfg.salad.token_dim,
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         patches, cls_token = self.backbone(x)

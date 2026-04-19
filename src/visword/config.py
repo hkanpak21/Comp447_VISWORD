@@ -42,6 +42,7 @@ class SaladConfig(_Strict):
     cluster_dim: int = 128
     token_dim: int = 256
     sinkhorn_iters: int = 3
+    ablation: Literal["full", "token_only", "vlad_only", "softmax_assign"] = "full"
 
 
 class TrainConfig(_Strict):

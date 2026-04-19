@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import io
+import json
 import logging
 import os
 import shutil
@@ -221,6 +222,149 @@ def prefetch_wiki_ss(
 
 
 # ---------------------------------------------------------------------------
+# Sharded wiki-ss prefetch (parallel CPU jobs writing disjoint idx ranges)
+# ---------------------------------------------------------------------------
+
+def _shard_partial_path(cache_dir: Path, start_idx: int, end_idx: int) -> Path:
+    return Path(cache_dir) / f"manifest.shard_{start_idx:07d}_{end_idx:07d}.json"
+
+
+def _write_shard(cache_dir: Path, start_idx: int, end_idx: int, rows: list[dict]) -> Path:
+    p = _shard_partial_path(cache_dir, start_idx, end_idx)
+    payload = {
+        "dataset": "Tevatron/wiki-ss-corpus",
+        "hf_revision": None,
+        "shard_start": start_idx,
+        "shard_end": end_idx,
+        "num_rows": len(rows),
+        "rows": rows,
+    }
+    tmp = p.with_suffix(p.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload, indent=2))
+    os.replace(tmp, p)
+    return p
+
+
+def prefetch_wiki_ss_shard(
+    cache_dir: Path,
+    *,
+    start_idx: int,
+    end_idx: int,
+    partial_every: int = 500,
+) -> dict[str, Any]:
+    """Prefetch rows ``[start_idx, end_idx)`` into a shard partial.
+
+    Each shard writes its own ``manifest.shard_<start>_<end>.json`` so multiple
+    workers can run in parallel without manifest contention. Blob writes are
+    keyed by global ``idx`` so the per-shard blob set is disjoint.
+
+    Resume-safe: if a shard partial exists with all expected rows, exits with
+    status=already_complete. Otherwise resumes from the last persisted row.
+    """
+    if end_idx <= start_idx:
+        raise ValueError(f"end_idx ({end_idx}) must be > start_idx ({start_idx})")
+
+    cache_dir = Path(cache_dir)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    target = end_idx - start_idx
+
+    rows: list[dict] = []
+    shard_path = _shard_partial_path(cache_dir, start_idx, end_idx)
+    if shard_path.exists():
+        existing = json.loads(shard_path.read_text())
+        rows = list(existing["rows"])
+        if len(rows) >= target:
+            logger.info("shard %d–%d already complete (%d rows)", start_idx, end_idx, len(rows))
+            return {
+                "shard_start": start_idx,
+                "shard_end": end_idx,
+                "rows_written": len(rows),
+                "status": "already_complete",
+            }
+        logger.info("resuming shard %d–%d from %d rows", start_idx, end_idx, len(rows))
+
+    next_idx = max((r["idx"] for r in rows), default=start_idx - 1) + 1
+    failed = 0
+    bytes_written = 0
+    started = time.time()
+
+    for idx, row in _stream_wiki_ss(start_idx=next_idx):
+        if idx >= end_idx:
+            break
+        result = _process_row(idx, row, cache_dir)
+        if result is None:
+            failed += 1
+            continue
+        manifest_row, nb = result
+        rows.append(manifest_row)
+        bytes_written += nb
+        if len(rows) % partial_every == 0:
+            _write_shard(cache_dir, start_idx, end_idx, rows)
+            logger.info("shard %d–%d checkpointed at %d/%d rows",
+                        start_idx, end_idx, len(rows), target)
+
+    _write_shard(cache_dir, start_idx, end_idx, rows)
+    elapsed = time.time() - started
+    summary = {
+        "shard_start": start_idx,
+        "shard_end": end_idx,
+        "rows_written": len(rows),
+        "rows_failed": failed,
+        "total_bytes": bytes_written,
+        "elapsed_seconds": round(elapsed, 2),
+        "status": "complete" if len(rows) >= target else "partial",
+    }
+    logger.info("shard %d–%d %s — %s", start_idx, end_idx, summary["status"].upper(), summary)
+    return summary
+
+
+def merge_shards(cache_dir: Path) -> dict[str, Any]:
+    """Combine ``manifest.json`` (if any) + all ``manifest.shard_*.json`` into final manifest.
+
+    Dedupes by ``idx`` (last write wins). Archives merged shard files under
+    ``_shards_archived/`` for forensics. Idempotent: re-running with no new
+    shards is a no-op.
+    """
+    cache_dir = Path(cache_dir)
+    rows_by_idx: dict[int, dict] = {}
+    dataset = "Tevatron/wiki-ss-corpus"
+    hf_revision: str | None = None
+
+    final_path = cache_dir / "manifest.json"
+    if final_path.exists():
+        existing = M.read_manifest(cache_dir)
+        for r in existing["rows"]:
+            rows_by_idx[r["idx"]] = r
+        dataset = existing.get("dataset", dataset)
+        hf_revision = existing.get("hf_revision")
+
+    shard_files = sorted(cache_dir.glob("manifest.shard_*.json"))
+    if not shard_files and not rows_by_idx:
+        raise RuntimeError(f"no manifest.json or shard files found at {cache_dir}")
+
+    for sf in shard_files:
+        data = json.loads(sf.read_text())
+        for r in data["rows"]:
+            rows_by_idx[r["idx"]] = r
+
+    rows = sorted(rows_by_idx.values(), key=lambda r: r["idx"])
+    M.write_manifest(cache_dir, dataset=dataset, hf_revision=hf_revision, rows=rows)
+
+    archive = cache_dir / "_shards_archived"
+    archive.mkdir(exist_ok=True)
+    for sf in shard_files:
+        os.replace(sf, archive / sf.name)
+
+    summary = {
+        "num_rows": len(rows),
+        "shards_merged": len(shard_files),
+        "status": "complete",
+    }
+    logger.info("merge OK — %s", summary)
+    return summary
+
+
+# ---------------------------------------------------------------------------
 # anchors prefetch driver
 # ---------------------------------------------------------------------------
 
@@ -266,9 +410,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--data-dir", required=True, type=Path)
     p.add_argument("--dataset", required=True, choices=["wiki-ss", "wiki-ss-anchors"])
     p.add_argument("--target-rows", type=int, default=21000,
-                   help="Only used for --dataset wiki-ss.")
+                   help="Only used for --dataset wiki-ss in non-shard mode.")
     p.add_argument("--resume", action="store_true", default=True)
     p.add_argument("--no-resume", dest="resume", action="store_false")
+    p.add_argument("--start-idx", type=int, default=None,
+                   help="wiki-ss shard mode: prefetch rows [start, end). "
+                        "Writes manifest.shard_<start>_<end>.json instead of partial.")
+    p.add_argument("--end-idx", type=int, default=None)
+    p.add_argument("--merge-shards", action="store_true",
+                   help="wiki-ss only: combine manifest.json + all shard files into final manifest.json.")
     return p
 
 
@@ -280,6 +430,16 @@ def main(argv: list[str] | None = None) -> int:
     cache_dir = args.data_dir / sub_dir_name
 
     if args.dataset == "wiki-ss":
+        if args.merge_shards:
+            merge_shards(cache_dir)
+            return 0
+        if args.start_idx is not None or args.end_idx is not None:
+            if args.start_idx is None or args.end_idx is None:
+                raise SystemExit("--start-idx and --end-idx must both be set")
+            summary = prefetch_wiki_ss_shard(
+                cache_dir, start_idx=args.start_idx, end_idx=args.end_idx
+            )
+            return 0 if summary["status"] in ("complete", "already_complete") else 2
         summary = prefetch_wiki_ss(cache_dir, args.target_rows, resume=args.resume)
         return 0 if summary["status"] in ("complete", "already_complete") else 2
 
