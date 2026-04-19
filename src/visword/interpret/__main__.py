@@ -206,8 +206,12 @@ def main(argv: list[str] | None = None) -> int:
     # (1) attention heatmaps
     _save_attention(model.backbone, eval_ds, args.k, interpret_dir, device)
 
-    # (2) SALAD cluster + dustbin maps (SALAD model only)
-    if cfg.model_kind == "salad":
+    # (2) SALAD cluster + dustbin maps. Only meaningful when the Sinkhorn-OT
+    # forward is active AND the descriptor includes the VLAD branch — i.e.
+    # the "full" ablation. token_only / softmax_assign skip Sinkhorn;
+    # vlad_only has no token branch so the cls_vs_vlad split is also moot.
+    salad_full = cfg.model_kind == "salad" and cfg.salad.ablation == "full"
+    if salad_full:
         _save_salad_heatmaps(
             model.aggregator, model.backbone, cfg, eval_ds,
             args.k, interpret_dir, device,
@@ -216,9 +220,8 @@ def main(argv: list[str] | None = None) -> int:
     # (3) patch neighbours
     _save_patch_neighbours(model.backbone, cfg, eval_ds, args.k, interpret_dir, device)
 
-    # (4) CLS-vs-VLAD aggregate (only meaningful for SALAD; the CLS baseline
-    # has descriptor_dim=256 with no VLAD half and would skip naturally).
-    if cfg.model_kind == "salad":
+    # (4) CLS-vs-VLAD aggregate (only meaningful for full SALAD).
+    if salad_full:
         _save_cls_vs_vlad(model, eval_ds, cfg, interpret_dir, device)
 
     # (5) dustbin evolution from metrics.jsonl
