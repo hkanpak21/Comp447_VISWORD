@@ -318,6 +318,91 @@ def prefetch_wiki_ss_shard(
     return summary
 
 
+def prefetch_arrow_shard(
+    cache_dir: Path,
+    *,
+    file_start: int,
+    file_end: int,
+    idx_base: int,
+    target_rows: int,
+    repo: str = "Tevatron/wiki-ss-corpus",
+    total_files: int = 809,
+    partial_every: int = 500,
+) -> dict[str, Any]:
+    """Download arrow files [file_start, file_end) directly + emit a shard partial.
+
+    Each worker takes a disjoint subset of arrow files and a disjoint
+    ``idx_base`` so multiple workers can run in parallel without manifest
+    or blob-name contention. Workers stop early once ``target_rows`` is hit.
+
+    Resume-safe: if the shard partial exists with all expected rows,
+    returns already_complete.
+    """
+    from huggingface_hub import hf_hub_download
+    from datasets import Dataset
+
+    cache_dir = Path(cache_dir)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+
+    shard_path = _shard_partial_path(cache_dir, idx_base, idx_base + target_rows)
+    rows: list[dict] = []
+    if shard_path.exists():
+        existing = json.loads(shard_path.read_text())
+        rows = list(existing["rows"])
+        if len(rows) >= target_rows:
+            logger.info("arrow shard idx_base=%d target=%d already complete (%d rows)",
+                        idx_base, target_rows, len(rows))
+            return {
+                "idx_base": idx_base,
+                "rows_written": len(rows),
+                "status": "already_complete",
+            }
+        logger.info("resuming arrow shard idx_base=%d from %d rows", idx_base, len(rows))
+
+    next_idx = idx_base + len(rows)
+    failed = 0
+    bytes_written = 0
+    started = time.time()
+
+    for fi in range(file_start, file_end):
+        if len(rows) >= target_rows:
+            break
+        fname = f"train/data-{fi:05d}-of-{total_files:05d}.arrow"
+        logger.info("downloading %s ...", fname)
+        local = hf_hub_download(repo_id=repo, filename=fname, repo_type="dataset")
+        ds = Dataset.from_file(local)
+        logger.info("loaded %s -> %d rows", fname, len(ds))
+        for row in ds:
+            if len(rows) >= target_rows:
+                break
+            result = _process_row(next_idx, row, cache_dir)
+            if result is None:
+                failed += 1
+                continue
+            rows.append(result[0])
+            bytes_written += result[1]
+            next_idx += 1
+            if len(rows) % partial_every == 0:
+                _write_shard(cache_dir, idx_base, idx_base + target_rows, rows)
+                logger.info("arrow shard idx_base=%d checkpointed at %d/%d rows",
+                            idx_base, len(rows), target_rows)
+
+    _write_shard(cache_dir, idx_base, idx_base + target_rows, rows)
+    elapsed = time.time() - started
+    summary = {
+        "idx_base": idx_base,
+        "file_range": [file_start, file_end],
+        "rows_written": len(rows),
+        "rows_failed": failed,
+        "total_bytes": bytes_written,
+        "elapsed_seconds": round(elapsed, 2),
+        "status": "complete" if len(rows) >= target_rows else "partial",
+    }
+    logger.info("arrow shard idx_base=%d %s — %s",
+                idx_base, summary["status"].upper(), summary)
+    return summary
+
+
 def merge_shards(cache_dir: Path) -> dict[str, Any]:
     """Combine ``manifest.json`` (if any) + all ``manifest.shard_*.json`` into final manifest.
 
@@ -414,9 +499,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--resume", action="store_true", default=True)
     p.add_argument("--no-resume", dest="resume", action="store_false")
     p.add_argument("--start-idx", type=int, default=None,
-                   help="wiki-ss shard mode: prefetch rows [start, end). "
-                        "Writes manifest.shard_<start>_<end>.json instead of partial.")
+                   help="wiki-ss stream-based shard mode (deprecated; thrashes on parallel HF streams). "
+                        "Prefetch rows [start, end) and writes manifest.shard_<start>_<end>.json.")
     p.add_argument("--end-idx", type=int, default=None)
+    # Arrow-file shard mode: each worker downloads a disjoint subset of arrow
+    # files via huggingface_hub and writes rows under a disjoint idx_base.
+    # This is the parallelisable path — does not stream-and-skip.
+    p.add_argument("--arrow-file-start", type=int, default=None,
+                   help="wiki-ss arrow shard mode: process arrow files [file_start, file_end).")
+    p.add_argument("--arrow-file-end", type=int, default=None)
+    p.add_argument("--arrow-idx-base", type=int, default=None,
+                   help="Global idx assigned to the first row of this arrow shard.")
     p.add_argument("--merge-shards", action="store_true",
                    help="wiki-ss only: combine manifest.json + all shard files into final manifest.json.")
     return p
@@ -433,6 +526,20 @@ def main(argv: list[str] | None = None) -> int:
         if args.merge_shards:
             merge_shards(cache_dir)
             return 0
+        arrow_args = (args.arrow_file_start, args.arrow_file_end, args.arrow_idx_base)
+        if any(a is not None for a in arrow_args):
+            if any(a is None for a in arrow_args):
+                raise SystemExit(
+                    "--arrow-file-start, --arrow-file-end, --arrow-idx-base must all be set"
+                )
+            summary = prefetch_arrow_shard(
+                cache_dir,
+                file_start=args.arrow_file_start,
+                file_end=args.arrow_file_end,
+                idx_base=args.arrow_idx_base,
+                target_rows=args.target_rows,
+            )
+            return 0 if summary["status"] in ("complete", "already_complete") else 2
         if args.start_idx is not None or args.end_idx is not None:
             if args.start_idx is None or args.end_idx is None:
                 raise SystemExit("--start-idx and --end-idx must both be set")
