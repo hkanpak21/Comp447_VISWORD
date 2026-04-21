@@ -1,0 +1,26 @@
+# Row 10 — DINOv2 + MLP head, last 4 blocks fine-tune, InfoNCE loss.
+# Same recipe as row 9 (CLS-main, MultiSim) with only the loss changed.
+# Isolates: is the SALAD>CLS gap loss-invariant, or does InfoNCE close it?
+
+experiment_name: visword-row10-cls-infonce
+model_kind: cls
+
+data:
+  num_train_samples: 4500
+  num_eval_samples: 500
+
+train:
+  loss: infonce
+  temperature: 0.07
+  k_per_page: 4
+  batch_size: 16
+  epochs: 3
+  lr_backbone: 1.0e-5
+  lr_head: 5.0e-4
+  eval_every_steps: 200
+  num_diag_batches: 3
+
+eval:
+  k_values: [1, 5, 10, 20]
+  phase1_max_pages: 500
+  phase2_max_queries: 200

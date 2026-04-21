@@ -1,0 +1,12 @@
+# Row 6 — CLIP-ViT-B/16 image branch zero-shot.
+experiment_name: visword-row06-clip-image
+model_kind: zeroshot_clip_image
+
+data:
+  num_train_samples: 0
+  num_eval_samples: 1000
+
+eval:
+  k_values: [1, 5, 10, 20]
+  phase1_max_pages: 1000
+  phase2_max_queries: 200

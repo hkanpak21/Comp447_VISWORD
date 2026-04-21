@@ -1,0 +1,24 @@
+# Row 11 — DINOv2 + MLP head, last 4 blocks fine-tune, Triplet loss.
+# Row 10's sibling — same recipe, different loss.
+
+experiment_name: visword-row11-cls-triplet
+model_kind: cls
+
+data:
+  num_train_samples: 4500
+  num_eval_samples: 500
+
+train:
+  loss: triplet
+  k_per_page: 4
+  batch_size: 16
+  epochs: 3
+  lr_backbone: 1.0e-5
+  lr_head: 5.0e-4
+  eval_every_steps: 200
+  num_diag_batches: 3
+
+eval:
+  k_values: [1, 5, 10, 20]
+  phase1_max_pages: 500
+  phase2_max_queries: 200

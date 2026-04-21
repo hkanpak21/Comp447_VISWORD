@@ -16,6 +16,11 @@ import json
 import subprocess
 import sys
 import time
+
+# Install DNS shim BEFORE any HF / CLIP / timm imports — compute nodes
+# SERVFAIL huggingface.co on the internal resolver.
+from visword.hf_dns_shim import install as _install_dns_shim  # noqa: E402
+_install_dns_shim()
 from pathlib import Path
 
 import torch
@@ -41,13 +46,19 @@ def _git_sha() -> str:
 
 
 def _build_zeroshot_model(cfg: Config) -> torch.nn.Module:
+    from visword.models.zeroshot import ZeroShotCLIPImage, ZeroShotImageNetViT
     if cfg.model_kind == "zeroshot_dinov2_cls":
         return ZeroShotDINOv2(cfg, mode="cls")
     if cfg.model_kind == "zeroshot_dinov2_mean":
         return ZeroShotDINOv2(cfg, mode="mean_patch")
+    if cfg.model_kind == "zeroshot_clip_image":
+        return ZeroShotCLIPImage(cfg)
+    if cfg.model_kind == "zeroshot_imagenet_vit":
+        return ZeroShotImageNetViT(cfg)
     raise SystemExit(
         f"eval_zeroshot: unsupported model_kind={cfg.model_kind!r}. "
-        f"Expected one of: zeroshot_dinov2_cls, zeroshot_dinov2_mean."
+        f"Expected one of: zeroshot_dinov2_cls, zeroshot_dinov2_mean, "
+        f"zeroshot_clip_image, zeroshot_imagenet_vit."
     )
 
 

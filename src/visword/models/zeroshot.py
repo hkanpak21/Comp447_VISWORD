@@ -65,4 +65,82 @@ class ZeroShotDINOv2(nn.Module):
         return F.normalize(mean, p=2, dim=-1)
 
 
-__all__ = ["ZeroShotDINOv2"]
+class ZeroShotCLIPImage(nn.Module):
+    """Row 6 — CLIP-ViT-B/16 image branch, frozen. Returns the 512-d image
+    projection, L2-normed."""
+
+    def __init__(self, cfg: Config) -> None:
+        super().__init__()
+        import open_clip
+        self.model, _, self.preprocess = open_clip.create_model_and_transforms(
+            'ViT-B-16', pretrained='openai')
+        for p in self.model.parameters():
+            p.requires_grad = False
+
+    @property
+    def descriptor_dim(self) -> int:
+        return 512
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        with torch.no_grad():
+            return F.normalize(self.model.encode_image(x).float(), p=2, dim=-1)
+
+
+class ZeroShotImageNetViT(nn.Module):
+    """Row 2 — ImageNet-21k + 1k supervised ViT-B/16 (timm), frozen."""
+
+    def __init__(self, cfg: Config) -> None:
+        super().__init__()
+        import timm
+        self.vit = timm.create_model(
+            'vit_base_patch16_224.augreg_in21k_ft_in1k',
+            pretrained=True, num_classes=0)
+        for p in self.vit.parameters():
+            p.requires_grad = False
+
+    @property
+    def descriptor_dim(self) -> int:
+        return 768
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        with torch.no_grad():
+            return F.normalize(self.vit(x).float(), p=2, dim=-1)
+
+
+class DINOv2LinearProbe(nn.Module):
+    """Row 7 — frozen DINOv2 backbone + trainable Linear head.
+
+    The single linear layer (768 → 256, L2-normed) is the ONLY trainable
+    parameter. Tests how much retrieval signal is already linearly decodable
+    from frozen DINOv2 features, isolating it from what our last-4-block
+    fine-tuning adds (rows 8/9) and from the MLP non-linearity (row 8+).
+    """
+
+    OUTPUT_DIM = 256
+
+    def __init__(self, cfg: Config) -> None:
+        super().__init__()
+        self.cfg = cfg
+        self.backbone = OfficialDINOv2(
+            model_name=cfg.backbone.arch,
+            num_trainable_blocks=1,
+            return_token=True,
+            norm_layer=True,
+        )
+        for p in self.backbone.parameters():
+            p.requires_grad = False
+        self.head = nn.Linear(cfg.backbone.feature_dim, self.OUTPUT_DIM, bias=True)
+
+    @property
+    def descriptor_dim(self) -> int:
+        return self.OUTPUT_DIM
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        _, cls_token = self.backbone(x)
+        return F.normalize(self.head(cls_token), p=2, dim=-1)
+
+
+__all__ = [
+    "ZeroShotDINOv2", "ZeroShotCLIPImage", "ZeroShotImageNetViT",
+    "DINOv2LinearProbe",
+]

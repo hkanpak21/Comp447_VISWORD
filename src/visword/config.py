@@ -69,7 +69,12 @@ class EvalConfig(_Strict):
 
 class Config(_Strict):
     experiment_name: str
-    model_kind: Literal["cls", "salad", "zeroshot_dinov2_cls", "zeroshot_dinov2_mean"] = "salad"
+    model_kind: Literal[
+        "cls", "salad",
+        "linear_probe",
+        "zeroshot_dinov2_cls", "zeroshot_dinov2_mean",
+        "zeroshot_clip_image", "zeroshot_imagenet_vit",
+    ] = "salad"
     data: DataConfig
     cropper: CropperConfig = Field(default_factory=CropperConfig)
     backbone: BackboneConfig = Field(default_factory=BackboneConfig)
