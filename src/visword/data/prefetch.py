@@ -30,6 +30,12 @@ import time
 from pathlib import Path
 from typing import Any, Iterator
 
+# Install the HF-DNS shim BEFORE any `datasets` / `huggingface_hub` import
+# so getaddrinfo is already patched when they create their HTTP clients.
+# The cluster's default DNS blocks huggingface.co; the shim uses 8.8.8.8.
+from visword.hf_dns_shim import install as _install_dns_shim  # noqa: E402
+_install_dns_shim()
+
 from PIL import Image
 
 from . import manifest as M
