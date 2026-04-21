@@ -403,6 +403,95 @@ def prefetch_arrow_shard(
     return summary
 
 
+def prefetch_split_slice(
+    cache_dir: Path,
+    *,
+    split_start: int,
+    split_end: int,
+    idx_base: int,
+    target_rows: int,
+    repo: str = "Tevatron/wiki-ss-corpus",
+    partial_every: int = 500,
+) -> dict[str, Any]:
+    """Prefetch a contiguous HF split slice ``train[split_start:split_end)`` in
+    parallel-safe shard mode.
+
+    Unlike :func:`prefetch_wiki_ss_shard` (which streams from row 0 and skips
+    until reaching ``start_idx`` — wasteful when running many workers), this
+    uses non-streaming ``load_dataset(split=f"train[a:b]")`` so each worker
+    downloads only the arrow files containing rows in its slice. Multiple
+    workers writing disjoint ``[idx_base, idx_base + target_rows)`` ranges
+    cannot collide on blob filenames or shard partial files.
+
+    Resume-safe: if the shard partial already contains ≥ ``target_rows``
+    rows, exits early with status=already_complete.
+    """
+    if split_end <= split_start:
+        raise ValueError(f"split_end ({split_end}) must be > split_start ({split_start})")
+
+    cache_dir = Path(cache_dir)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+
+    shard_path = _shard_partial_path(cache_dir, idx_base, idx_base + target_rows)
+    rows: list[dict] = []
+    if shard_path.exists():
+        existing = json.loads(shard_path.read_text())
+        rows = list(existing["rows"])
+        if len(rows) >= target_rows:
+            logger.info("split shard idx_base=%d already complete (%d rows)",
+                        idx_base, len(rows))
+            return {
+                "idx_base": idx_base,
+                "rows_written": len(rows),
+                "status": "already_complete",
+            }
+        logger.info("resuming split shard idx_base=%d from %d rows", idx_base, len(rows))
+
+    next_idx = idx_base + len(rows)
+    failed = 0
+    bytes_written = 0
+    started = time.time()
+
+    from datasets import load_dataset
+    split_str = f"train[{split_start}:{split_end}]"
+    logger.info("loading %s split=%s ...", repo, split_str)
+    ds = load_dataset(repo, split=split_str)
+    logger.info("loaded %s -> %d rows", split_str, len(ds))
+
+    skip = len(rows)  # Resume from where we left off within the slice.
+    for offset, row in enumerate(ds):
+        if offset < skip:
+            continue
+        if len(rows) >= target_rows:
+            break
+        result = _process_row(next_idx, row, cache_dir)
+        if result is None:
+            failed += 1
+            continue
+        rows.append(result[0])
+        bytes_written += result[1]
+        next_idx += 1
+        if len(rows) % partial_every == 0:
+            _write_shard(cache_dir, idx_base, idx_base + target_rows, rows)
+            logger.info("split shard idx_base=%d checkpointed at %d/%d rows",
+                        idx_base, len(rows), target_rows)
+
+    _write_shard(cache_dir, idx_base, idx_base + target_rows, rows)
+    elapsed = time.time() - started
+    summary = {
+        "idx_base": idx_base,
+        "split": [split_start, split_end],
+        "rows_written": len(rows),
+        "rows_failed": failed,
+        "total_bytes": bytes_written,
+        "elapsed_seconds": round(elapsed, 2),
+        "status": "complete" if len(rows) >= target_rows else "partial",
+    }
+    logger.info("split shard idx_base=%d %s — %s",
+                idx_base, summary["status"].upper(), summary)
+    return summary
+
+
 def merge_shards(cache_dir: Path) -> dict[str, Any]:
     """Combine ``manifest.json`` (if any) + all ``manifest.shard_*.json`` into final manifest.
 
@@ -510,6 +599,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--arrow-file-end", type=int, default=None)
     p.add_argument("--arrow-idx-base", type=int, default=None,
                    help="Global idx assigned to the first row of this arrow shard.")
+    # Split-slice shard mode: each worker fetches a contiguous HF split slice
+    # via load_dataset(split="train[a:b]"). HF picks only the arrow files
+    # actually overlapping [a,b); no stream-and-skip from row 0.
+    p.add_argument("--split-start", type=int, default=None,
+                   help="wiki-ss split-slice shard mode: load_dataset(split=train[start:end]).")
+    p.add_argument("--split-end", type=int, default=None)
+    p.add_argument("--split-idx-base", type=int, default=None,
+                   help="Global idx assigned to the first row of this split shard.")
     p.add_argument("--merge-shards", action="store_true",
                    help="wiki-ss only: combine manifest.json + all shard files into final manifest.json.")
     return p
@@ -537,6 +634,20 @@ def main(argv: list[str] | None = None) -> int:
                 file_start=args.arrow_file_start,
                 file_end=args.arrow_file_end,
                 idx_base=args.arrow_idx_base,
+                target_rows=args.target_rows,
+            )
+            return 0 if summary["status"] in ("complete", "already_complete") else 2
+        split_args = (args.split_start, args.split_end, args.split_idx_base)
+        if any(a is not None for a in split_args):
+            if any(a is None for a in split_args):
+                raise SystemExit(
+                    "--split-start, --split-end, --split-idx-base must all be set"
+                )
+            summary = prefetch_split_slice(
+                cache_dir,
+                split_start=args.split_start,
+                split_end=args.split_end,
+                idx_base=args.split_idx_base,
                 target_rows=args.target_rows,
             )
             return 0 if summary["status"] in ("complete", "already_complete") else 2

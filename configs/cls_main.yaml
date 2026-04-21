@@ -1,11 +1,11 @@
-# Scale-up SALAD on the 15k cache: 10k train + 1k eval, 3 epochs.
-# bs=16 (T4 OOMs at 32 for SALAD-full). 10k/(16/4)*3 = 7500 steps × ~2.4s = ~5h.
+# Scale-up CLS baseline at the salad_main recipe (10k train / 1k eval, 3 ep, bs=16).
+# Apples-to-apples partner of configs/salad_main.yaml.
 #
 # Usage:
-#   sbatch --export=ALL,CONFIG=configs/salad_main.yaml,RUN_NAME=salad-main slurm/train.sbatch
+#   sbatch --export=ALL,CONFIG=configs/cls_main.yaml,RUN_NAME=cls-main slurm/train.sbatch
 
-experiment_name: visword-salad-main
-model_kind: salad
+experiment_name: visword-cls-main
+model_kind: cls
 
 data:
   num_train_samples: 10000
