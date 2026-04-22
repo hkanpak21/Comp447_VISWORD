@@ -197,6 +197,9 @@ def _build_model_from_cfg(cfg: Config) -> torch.nn.Module:
     if cfg.model_kind == "salad":
         from visword.models.dinov2_salad import DINOv2SALAD
         return DINOv2SALAD(cfg)
+    if cfg.model_kind == "linear_probe":
+        from visword.models.zeroshot import DINOv2LinearProbe
+        return DINOv2LinearProbe(cfg)
     from visword.models.dinov2_cls import DINOv2CLS
     return DINOv2CLS(cfg)
 
