@@ -72,6 +72,7 @@ class Config(_Strict):
     model_kind: Literal[
         "cls", "salad",
         "linear_probe",
+        "clip_cls", "clip_salad",
         "zeroshot_dinov2_cls", "zeroshot_dinov2_mean",
         "zeroshot_clip_image", "zeroshot_imagenet_vit",
     ] = "salad"

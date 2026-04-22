@@ -127,6 +127,12 @@ def _build_model(cfg: Config) -> torch.nn.Module:
     if cfg.model_kind == "linear_probe":
         from visword.models.zeroshot import DINOv2LinearProbe
         return DINOv2LinearProbe(cfg)
+    if cfg.model_kind == "clip_salad":
+        from visword.models.clip_salad import CLIPSALAD
+        return CLIPSALAD(cfg)
+    if cfg.model_kind == "clip_cls":
+        from visword.models.clip_salad import CLIPCLS
+        return CLIPCLS(cfg)
     from visword.models.dinov2_cls import DINOv2CLS
     return DINOv2CLS(cfg)
 
