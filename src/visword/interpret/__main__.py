@@ -203,8 +203,13 @@ def main(argv: list[str] | None = None) -> int:
     interpret_dir = run_dir / "interpret"
     interpret_dir.mkdir(parents=True, exist_ok=True)
 
-    # (1) attention heatmaps
-    _save_attention(model.backbone, eval_ds, args.k, interpret_dir, device)
+    # (1) attention heatmaps — only DINOv2-family backbones (others
+    # have different internal layouts and the attention extractor would crash)
+    if cfg.model_kind in {"salad", "cls", "linear_probe"}:
+        try:
+            _save_attention(model.backbone, eval_ds, args.k, interpret_dir, device)
+        except Exception as exc:
+            sys.stderr.write(f"interpret: attention skipped ({type(exc).__name__}: {exc})\n")
 
     # (2) SALAD cluster + dustbin maps. Only meaningful when the Sinkhorn-OT
     # forward is active AND the descriptor includes the VLAD branch — i.e.
@@ -217,8 +222,12 @@ def main(argv: list[str] | None = None) -> int:
             args.k, interpret_dir, device,
         )
 
-    # (3) patch neighbours
-    _save_patch_neighbours(model.backbone, cfg, eval_ds, args.k, interpret_dir, device)
+    # (3) patch neighbours — DINOv2-family only (uses backbone.model.blocks)
+    if cfg.model_kind in {"salad", "cls", "linear_probe"}:
+        try:
+            _save_patch_neighbours(model.backbone, cfg, eval_ds, args.k, interpret_dir, device)
+        except Exception as exc:
+            sys.stderr.write(f"interpret: patch_neighbours skipped ({type(exc).__name__}: {exc})\n")
 
     # (4) CLS-vs-VLAD aggregate (only meaningful for full SALAD).
     if salad_full:

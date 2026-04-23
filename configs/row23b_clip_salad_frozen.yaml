@@ -1,0 +1,27 @@
+# Row 23b — CLIP image FROZEN + SALAD aggregator trained on top.
+# Mirror of row 22b for SALAD head.
+
+experiment_name: visword-row23b-clip-salad-frozen
+model_kind: clip_salad
+
+data:
+  num_train_samples: 4500
+  num_eval_samples: 500
+
+backbone:
+  num_trainable_blocks: 0
+
+train:
+  loss: multisim
+  k_per_page: 4
+  batch_size: 16
+  epochs: 3
+  lr_backbone: 0.0
+  lr_head: 5.0e-4
+  eval_every_steps: 200
+  num_diag_batches: 3
+
+eval:
+  k_values: [1, 5, 10, 20]
+  phase1_max_pages: 500
+  phase2_max_queries: 200
