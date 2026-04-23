@@ -1059,4 +1059,108 @@ Anschütz et al. SemAntoNeg (2024).
 
 ---
 
-*End of document.*
+---
+
+## 10. New result — Platonic alignment measured
+
+Added 2026-04-23. A first empirical probe from the §7.2 program.
+Source: `runs/platonic_alignment_2026-04-23_212926/report.json`.
+
+**Protocol.** Sampled 500 pages uniformly from the 376k-row merged
+cache, encoded each page's *image* with frozen DINOv2-ViT-B/14 and
+CLIP-ViT-B/16 image branch, and each page's *title* with
+`bert-base-uncased` (mean-pooled), `all-MiniLM-L6-v2`, and the CLIP
+ViT-B/16 text branch. Computed pairwise linear alignment via debiased
+HSIC / CKA (Murphy et al., 2024), Procrustes distance after
+unit-Frobenius normalisation, and mutual-kNN overlap at k=10 (Huh et
+al., *ICML 2024*).
+
+**Debiased CKA matrix:**
+
+|                | DINOv2 | CLIP-img | BERT  | MiniLM | CLIP-txt |
+|----------------|--------|----------|-------|--------|----------|
+| **DINOv2**     | —      | 0.196    | 0.027 | 0.038  | 0.041    |
+| **CLIP-img**   | 0.196  | —        | 0.232 | 0.294  | 0.364    |
+| **BERT**       | 0.027  | 0.232    | —     | 0.319  | 0.375    |
+| **MiniLM**     | 0.038  | 0.294    | 0.319 | —      | 0.382    |
+| **CLIP-txt**   | 0.041  | 0.364    | 0.375 | 0.382  | —        |
+
+**Mutual-kNN @10 corroborates the CKA ranking:**
+
+|                | DINOv2 | CLIP-img | BERT  | MiniLM | CLIP-txt |
+|----------------|--------|----------|-------|--------|----------|
+| **DINOv2**     | —      | 0.089    | 0.042 | 0.042  | 0.032    |
+| **CLIP-img**   | 0.089  | —        | 0.106 | 0.120  | 0.138    |
+| **BERT**       | 0.042  | 0.106    | —     | 0.194  | 0.133    |
+| **MiniLM**     | 0.042  | 0.120    | 0.194 | —      | 0.142    |
+| **CLIP-txt**   | 0.032  | 0.138    | 0.133 | 0.142  | —        |
+
+**Findings.**
+
+- **F8 — DINOv2 is linearly isolated from text** on the wiki-ss
+  distribution. CKA ≤ 0.041 against every text encoder. Mutual-kNN ≤
+  0.042 at k=10 (vs. ~0.10 chance for the distribution). On rendered
+  text, the Platonic Representation Hypothesis (Huh et al., *ICML
+  2024*) **fails for pure self-supervised image pretraining** —
+  DINOv2's image features do not share linear structure with BERT/MiniLM
+  /CLIP-text representations of the same page's title. This is a
+  clean negative result, directly contradicting the strongest reading
+  of the hypothesis; it is consistent with Maniparambil et al.'s
+  (*CVPR 2024*) observation that unimodal vision-vs-text alignment is
+  substantial only after post-hoc training, not out of the box.
+
+- **F9 — CLIP-image features are 5–10× more aligned with text
+  encoders than DINOv2's are.** Best CLIP-image↔text CKA is 0.364
+  (with CLIP-text, same-family) and 0.294 with an external MiniLM.
+  Mutual-kNN@10 ≥ 0.106 with every text encoder. This is direct
+  evidence that **language supervision during vision pretraining
+  induces linear text-alignability**, not just downstream task
+  performance. Consistent with Stevens et al.'s (2025) SAE observation
+  that CLIP's language supervision yields cross-style abstractions
+  DINOv2 doesn't.
+
+- **F10 — The strongest vision↔text pair is within-family**
+  (CLIP-image ↔ CLIP-text, CKA 0.364), but CLIP-image ↔ external text
+  (MiniLM 0.294, BERT 0.232) is also substantial — cross-encoder
+  alignment is not a trivial artefact of shared embedding space.
+
+- **F11 — Text encoders cluster together** with CKA 0.319–0.382
+  amongst themselves, as expected for models trained on the same
+  language. This establishes a natural "ceiling" for cross-modal
+  alignment (no vision-text pair can reasonably exceed within-text
+  alignment in this population).
+
+**Implications for the project.**
+
+1. The F2 anchor-pool inversion (DINOv2-SALAD loses transfer to the
+   anchor pool) now has a deeper explanation: DINOv2's features are
+   *not aligned to the linguistic content of the page* in any
+   linearly-decodable sense, so contrastive fine-tuning on layout
+   fingerprints pushes them further from what would help anchor
+   retrieval. CLIP's features are text-aligned out of the box, which
+   is why zero-shot CLIP dominates Phase 2.
+
+2. Any "train a head to fix transfer" intervention on DINOv2 is
+   fighting the feature geometry; the cheaper intervention is to
+   switch backbones (F1).
+
+3. The strong conclusion — *the Platonic hypothesis is false for
+   self-supervised image pretraining on rendered text* — depends on
+   n=500 and a linear-alignment assumption. The §7.7 probing program
+   (structural probe, MDL, LEACE) on these same representations
+   would test the nonlinear decodability, and is the natural next
+   experiment.
+
+**Caveats.** Alignment is measured in a 500-sample, frozen-feature
+linear-kernel regime. We do not claim "vision and text representations
+are nowhere alignable"; we claim that *on rendered Wikipedia
+screenshots, DINOv2's image features and BERT-style text features do
+not share substantial linear structure, while CLIP's image features
+do*. The Text2Concept methodology (Moayeri et al., 2023) could be
+applied to learn a single linear map from DINOv2 to CLIP-text space
+and measure its transfer quality — this would quantify how much
+*post-hoc* alignment is recoverable.
+
+---
+
+*End of document (revision 2026-04-23).*

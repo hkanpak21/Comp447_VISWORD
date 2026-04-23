@@ -1,0 +1,24 @@
+# SALAD-full scale-up on the 376k-row cache (post-prefetch): 20k train / 2k eval / 2 epochs.
+# Fits in T4's 8h walltime cap (20k/(16/4)*2 = 10000 steps × ~2.4s = ~6.7h).
+
+experiment_name: visword-salad-20k
+model_kind: salad
+
+data:
+  num_train_samples: 20000
+  num_eval_samples: 2000
+
+train:
+  loss: multisim
+  k_per_page: 4
+  batch_size: 16
+  epochs: 2
+  lr_backbone: 1.0e-5
+  lr_head: 5.0e-4
+  eval_every_steps: 500
+  num_diag_batches: 3
+
+eval:
+  k_values: [1, 5, 10, 20]
+  phase1_max_pages: 2000
+  phase2_max_queries: 200

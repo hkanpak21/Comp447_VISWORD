@@ -18,6 +18,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+# Install DNS shim BEFORE any lazy timm / open_clip / transformers import
+# (compute nodes SERVFAIL huggingface.co on the internal resolver).
+from visword.hf_dns_shim import install as _install_dns_shim  # noqa: E402
+_install_dns_shim()
+
 from visword.config import Config
 from visword.models.salad_bridge import OfficialDINOv2
 
