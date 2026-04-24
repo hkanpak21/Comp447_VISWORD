@@ -380,10 +380,11 @@ scales to measure how the SALAD>CLS gap depends on training budget:
 
 | Scale | Data (train×eval) | Epochs | Steps | SALAD R@10 | CLS R@10 | Gap |
 |---|---|---|---|---|---|---|
-| smoke    | 4 000 × 800 | 2 |   500 | 0.871 | 0.447 | +42.4 |
-| 5k-main  | 4 500 × 500 | 3 |   840 | 0.955 | 0.653 | +30.2 |
-| 5k-long  | 4 500 × 500 | 8 | 2 240 | 0.970 | 0.761 | +20.9 |
+| smoke    | 4 000 × 800  | 2 |   500 | 0.871 | 0.447 | +42.4 |
+| 5k-main  | 4 500 × 500  | 3 |   840 | 0.955 | 0.653 | +30.2 |
+| 5k-long  | 4 500 × 500  | 8 | 2 240 | 0.970 | 0.761 | +20.9 |
 | main     | 10 000 × 1 000 | 3 | 1 875 | 0.925 | 0.741 | +18.4 |
+| **20k**  | 20 000 × 2 000 | 2 | 2 500 | **0.901** | **0.718** | **+18.3** |
 
 Two patterns: (1) more training-on-the-same-data closes the gap
 faster than more data — at 5k-long (5 k pages × 8 epochs) SALAD R@10 =
@@ -1163,4 +1164,102 @@ and measure its transfer quality — this would quantify how much
 
 ---
 
-*End of document (revision 2026-04-23).*
+---
+
+## 11. New result — Training pushes features TOWARD text alignment but anchor-pool transfer still degrades
+
+Added 2026-04-24. Extended `runs/platonic_trained_2026-04-24_005456/`.
+500-page sample, same protocol as §10, with our trained models added
+to the matrix: SALAD-main (`runs/2026-04-19_201330…_salad-main_138f`),
+CLS-main (`runs/2026-04-19_213919…_cls-main_db61`), and the linear
+probe (`runs/2026-04-21_195057…_row07-linear-probe_385b`).
+
+**Debiased CKA — trained models against text encoders:**
+
+|                  | BERT   | MiniLM | CLIP-text | (vs zero-shot DINOv2) |
+|------------------|--------|--------|-----------|------------------------|
+| DINOv2 zero-shot | 0.034  | 0.037  | 0.052     | reference (1×)         |
+| Linear probe     | 0.022  | 0.026  | 0.049     | ≈ same as zero-shot    |
+| **CLS-main (trained)** | **0.081** | **0.077** | **0.105** | **2.0–2.4×** zero-shot |
+| **SALAD-main (trained)** | **0.105** | **0.109** | **0.118** | **2.3–3.1×** zero-shot |
+| (CLIP-image zero-shot) | 0.232 | 0.294 | 0.364 | 5–7× zero-shot DINOv2 |
+
+**Trained-vs-trained / vs frozen-DINOv2:**
+
+|                  | DINOv2 zero-shot | CLIP-image | Linear probe |
+|------------------|------------------|------------|--------------|
+| SALAD-main       | 0.436            | 0.269      | 0.386        |
+| CLS-main         | 0.520            | 0.235      | 0.484        |
+| Linear probe     | **0.874**        | 0.138      | —            |
+
+**Findings.**
+
+- **F12 — Contrastive fine-tuning DOES move DINOv2 features toward
+  text alignment**, by 2–3× over the frozen baseline, contrary to the
+  strongest reading of F8. SALAD-main's CKA against BERT is 0.105
+  (vs. 0.034 zero-shot, +0.071); against MiniLM 0.109 (vs. 0.037,
+  +0.072); against CLIP-text 0.118 (vs. 0.052, +0.066). This refutes
+  the "training pushes features into a pure layout subspace" reading
+  of F2: training does increase the linguistic decodability of
+  DINOv2-derived descriptors. The increase is not large enough to
+  reach CLIP's natural levels (0.232–0.364) but is unambiguous.
+
+- **F13 — Yet text alignment increase ≠ Phase-2 transfer
+  improvement.** SALAD-main (CKA 0.105 with BERT, P2 R@1 0.390)
+  *underperforms* zero-shot DINOv2 (CKA 0.034, P2 R@1 0.593) on the
+  anchor task. The Phase-2 task is image→image, not image→text;
+  layout-fingerprinting (which training induces) and text alignment
+  (which training also induces) are *both* increasing, but the
+  former dominates the anchor-image-similarity outcome. Conclusion:
+  text alignment is *not* a sufficient predictor of cross-distribution
+  visual transfer. CLIP wins Phase 2 because its image features are
+  *both* text-aligned (CKA 0.232) *and* not over-specialised to
+  wiki-ss layout — a combination training-on-wiki-ss cannot
+  reproduce starting from DINOv2.
+
+- **F14 — Linear probe ≈ DINOv2 zero-shot in feature geometry**
+  (CKA 0.874 with frozen DINOv2). Adding a single trainable Linear
+  head barely deforms the underlying representation — the geometry
+  remains DINOv2's. This explains why F6 saw the linear probe reach
+  roughly half of full SALAD's R@10 (it carries half the
+  expressivity of the trainable backbone) but stay close to
+  zero-shot's anchor-pool transfer (CKA 0.022 with BERT —
+  essentially identical to zero-shot DINOv2's 0.034). The Linear
+  head's R@10 = 0.273 vs. zero-shot's 0.097 reflects task-specific
+  rotation, not representational restructuring.
+
+- **F15 — SALAD-main and CLS-main share 0.593 CKA** despite
+  different head architectures and 33× output-dim ratio (8 448 vs.
+  256). They have learned similar geometric properties from the same
+  data — the "Wikipedia-layout fingerprint" sits in both, just
+  packaged differently.
+
+**Implications.**
+
+The story is now clearer:
+1. The Platonic hypothesis is testable in two regimes: *backbone
+   choice* (CLIP vs. DINOv2 — F8/F9: clear separation) and *post-hoc
+   training* (CLS/SALAD on top of DINOv2 — F12: directional move,
+   incomplete amount).
+2. The Phase-2 inversion (F2) is NOT explained by features moving
+   "away from text" — they actually move toward it. It is explained
+   by features moving toward *both* text *and* wiki-ss-layout
+   simultaneously, with the layout component dominating the
+   image→image anchor task.
+3. The natural next experiment (§7.7 LEACE-style concept scrubbing)
+   becomes very pointed: scrub the "text-aligned" subspace from
+   SALAD-main and re-test Phase 2; scrub the "layout fingerprint"
+   subspace and re-test. The decomposition would show *which*
+   moves-toward is causally responsible for the inversion.
+
+**Caveats.** Same as §10: linear-kernel CKA on n=500. F12's "2–3×
+increase" is a modest absolute change in alignment; the qualitative
+story (training increases text-decodability) is robust but its
+practical implication for downstream tasks depends on what
+*linguistic* structure is decodable, not just how much linear-kernel
+overlap exists. This is what the structural / MDL probing program in
+§7.7 will quantify.
+
+---
+
+*End of document (revision 2026-04-24).*
