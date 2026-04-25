@@ -32,6 +32,10 @@ fi
 
 # Resolve project root from the script location (no git dep).
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# `third_party/` is empty in the repo and gitignored, so a fresh clone
+# may not have it. Create it on demand so this script works on a
+# vanilla `git clone` (Colab, colleague's laptop, etc.).
+mkdir -p "$PROJECT_ROOT/third_party"
 cd "$PROJECT_ROOT/third_party"
 
 if [ -d salad ]; then
