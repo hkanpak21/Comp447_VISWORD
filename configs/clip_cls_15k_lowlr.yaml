@@ -1,0 +1,24 @@
+# CLIP-image (last-4 fine-tune) + MLP CLS head at 15k train, lr_bb=1e-7.
+# CLS counterpart of clip_salad_15k_lowlr. Same recipe, MLP head only.
+
+experiment_name: visword-clip-cls-15k-lowlr
+model_kind: clip_cls
+
+data:
+  num_train_samples: 15000
+  num_eval_samples: 1500
+
+train:
+  loss: multisim
+  k_per_page: 4
+  batch_size: 16
+  epochs: 3
+  lr_backbone: 1.0e-7
+  lr_head: 5.0e-4
+  eval_every_steps: 400
+  num_diag_batches: 3
+
+eval:
+  k_values: [1, 5, 10, 20]
+  phase1_max_pages: 1500
+  phase2_max_queries: 200

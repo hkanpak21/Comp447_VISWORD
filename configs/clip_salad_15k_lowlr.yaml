@@ -1,0 +1,26 @@
+# CLIP-image (last-4 blocks fine-tune) + SALAD-full at 15k train.
+# Critical: lr_backbone reduced 100× (1e-7 vs the 1e-5 that collapsed
+# row 22/23). Tests whether a very small CLIP backbone perturbation
+# avoids the mode collapse and meaningfully improves over CLIP zero-shot.
+
+experiment_name: visword-clip-salad-15k-lowlr
+model_kind: clip_salad
+
+data:
+  num_train_samples: 15000
+  num_eval_samples: 1500
+
+train:
+  loss: multisim
+  k_per_page: 4
+  batch_size: 16
+  epochs: 3
+  lr_backbone: 1.0e-7   # 100× lower than DINOv2 default; key to avoiding collapse
+  lr_head: 5.0e-4
+  eval_every_steps: 400
+  num_diag_batches: 3
+
+eval:
+  k_values: [1, 5, 10, 20]
+  phase1_max_pages: 1500
+  phase2_max_queries: 200

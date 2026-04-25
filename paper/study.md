@@ -385,6 +385,23 @@ scales to measure how the SALAD>CLS gap depends on training budget:
 | 5k-long  | 4 500 × 500  | 8 | 2 240 | 0.970 | 0.761 | +20.9 |
 | main     | 10 000 × 1 000 | 3 | 1 875 | 0.925 | 0.741 | +18.4 |
 | **20k**  | 20 000 × 2 000 | 2 | 2 500 | **0.901** | **0.718** | **+18.3** |
+| **15k**  | 15 000 × 1 500 | 3 | 2 400 (best) | 0.923 | 0.748 | +17.5 |
+
+Phase 2 R@1 across SALAD trained runs (the metric that separates them):
+
+| Run | P2 R@1 | Sanity gap | Notes |
+|---|---|---|---|
+| salad-main (10k×3) | 0.390 | −0.045 | most over-specialised |
+| salad-20k (20k×2) | 0.398 | −0.030 |  |
+| salad-5k-long (5k×8) | 0.398 | −0.040 |  |
+| **salad-15k (15k×3)** | **0.483** | **−0.014** | **best Phase 2; least inverted gap** |
+
+salad-15k is the **first trained SALAD run whose anchor-pool sanity
+gap is approximately zero** rather than meaningfully negative. *More
+data with same number of epochs partially counteracts wiki-ss
+over-specialisation* — a pattern that should be tested further at
+30k+ data scale, except T4 walltime caps make 30k×3 infeasible in a
+single sbatch.
 
 Two patterns: (1) more training-on-the-same-data closes the gap
 faster than more data — at 5k-long (5 k pages × 8 epochs) SALAD R@10 =
