@@ -63,16 +63,22 @@ adapter? \textbf{(Q3)} How does the Platonic Representation Hypothesis
 \cite{huh2024platonic} explain the cross-encoder ordering, and does
 LEACE-style causal erasure \cite{belrose2023leace} of layout-region or
 title-region directions disambiguate ``encoded'' from ``causally used''
-features? Our preliminary findings: under leak-free retrieval, CLIP
-zero-shot dominates among off-the-shelf encoders \TODO{($P{=}2000$)
-R@10$=$X.XX}, SigLIP closes \TODO{$\Delta$=Y.YY} of the gap when
-matched architecturally, and I-JEPA's image-only features show
-non-trivial mutual-kNN alignment with BERT/CLIP-text \TODO{kNN@10$=$Z.ZZ},
-suggesting that predictive pretraining induces a partially text-aligned
-geometry without text supervision. We argue this opens a credible path
-to ``CLIP-level retrieval without contrastive text supervision'' that
-sidesteps the OCR-style shortcut behaviour CLIP is known to fall into
-\cite{lin2024parrot,materzynska2022spelling}.
+features? Headline zero-shot finding ($P{=}2000$ pages, single seed): CLIP
+zero-shot achieves Protocol-A R@10$\,=\,0.779$, an enormous margin
+over DINOv2 (0.058), I-JEPA (0.015 — at chance), and ImageNet-supervised
+ViT (0.031). The gap rules out ``architecture alone explains the
+result'' (random ViT scores 0.029) and forces the explanatory burden
+onto pretraining objective. The Q3 question is left open by this
+evidence in an interesting way: I-JEPA's image-only predictive
+features are uncompetitive out-of-the-box on visual document
+retrieval, so the relevant test is whether a small post-hoc text
+adapter \cite{jose2024dinov2text} can rescue I-JEPA to CLIP-level
+performance --- and crucially, do so without the OCR-style shortcut
+behaviour CLIP is known to fall into
+\cite{lin2024parrot, materzynska2022spelling}. Title-blanked Phase-2
+and LEACE causal erasure (\S\ref{sec:exp_titleblanked},
+\S\ref{sec:exp_leace}) disambiguate the H-OCR / H-Platonic /
+H-Form hypotheses for CLIP's edge.
 \end{abstract}
 
 \section{Introduction}
@@ -442,27 +448,54 @@ side-steps the OCR shortcut documented for CLIP.
 \label{sec:exp_retrieval}
 
 \begin{table}[t]
-\caption{Protocol-A retrieval (zero-shot, $P=2000$ pages, single
-seed). Random R@1 $= 5\times 10^{-4}$. \TODO{Numbers will be
-populated once Track-C and re-eval jobs (1027666--68, 1027677)
-finish, ETA \textasciitilde 24--40\,h.}}
+\caption{Protocol-A retrieval (zero-shot, $P=2000$ pages, eval seed
+42, single-seed). Random R@1 $= 5\times 10^{-4}$, random R@10 $= 5
+\times 10^{-3}$. Sanity gap = same-page minus diff-page mean cosine
+similarity; positive = real discrimination.}
 \label{tab:retrieval_zeroshot}
 \centering
 \small
-\begin{tabular}{lcccc}
+\begin{tabular}{lccccc}
 \toprule
-Encoder & R@1 & R@5 & R@10 & R@20 \\
+Encoder & R@1 & R@5 & R@10 & R@20 & gap \\
 \midrule
-ImageNet-21k ViT     & \TODO{} & \TODO{} & \TODO{} & \TODO{} \\
-DINOv2 ViT-B/14       & 0.094\TODO{ confirm} & \TODO{} & \TODO{} & \TODO{} \\
-CLIP ViT-B/16         & \TODO{} & \TODO{} & \TODO{} & \TODO{} \\
-SigLIP ViT-B/16       & \TODO{} & \TODO{} & \TODO{} & \TODO{} \\
-I-JEPA ViT-H/14       & \TODO{} & \TODO{} & \TODO{} & \TODO{} \\
+ImageNet-21k ViT-B/16  & 0.009 & 0.022 & 0.031 & 0.043 & $-$0.002 \\
+DINOv2 ViT-B/14         & 0.022 & 0.043 & 0.058 & 0.075 & $+$0.010 \\
+\textbf{CLIP ViT-B/16}  & \textbf{0.548} & \textbf{0.715} & \textbf{0.779} & \textbf{0.833} & $+$0.205 \\
+SigLIP ViT-B/16         & \TODO{rerun} & \TODO{} & \TODO{} & \TODO{} & \TODO{} \\
+I-JEPA ViT-H/14         & 0.002 & 0.008 & 0.015 & 0.021 & $-$0.002 \\
 \midrule
-Random-init ViT-B/16  & \TODO{$\sim$1/$P$} & \TODO{} & \TODO{} & \TODO{} \\
+Random-init ViT-B/16    & 0.007 & 0.020 & 0.029 & 0.042 & $+$0.000 \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+Three observations stand out from
+Table~\ref{tab:retrieval_zeroshot}.
+
+\textbf{(i) CLIP zero-shot dominates by an enormous margin
+(R@10$\,=\,$0.78 versus DINOv2's 0.06 and I-JEPA's 0.015 — 156$\times$
+above the random R@10 baseline of 0.005).} This sets up the H-OCR
+versus H-Platonic disambiguation as the central question for
+\S\ref{sec:exp_titleblanked}.
+
+\textbf{(ii) I-JEPA zero-shot is at chance,} below the random-init
+plain ViT on every $k$ and with a marginally negative sanity gap.
+The view-invariance/contrastive DINOv2 features (R@10 = 0.058) sit
+modestly above random; the latent-prediction I-JEPA features sit
+\emph{below} random for the same architecture family. This falsifies
+the optimistic reading of Q3 (``predictive pretraining alone might
+induce text-aligned features'') in its strongest form: I-JEPA's
+out-of-the-box features are uncompetitive on visual document
+retrieval, which makes the post-hoc adapter test in
+\S\ref{sec:exp_jepa_adapter} the central remaining test of Q3.
+
+\textbf{(iii) ImageNet supervision adds essentially nothing}
+(R@10$\,=\,$0.031 vs.\ random ViT's 0.029): label-supervised
+classification on natural images does not transfer to
+document-screenshot retrieval at the page level, a finding that
+matches the broader literature on classification-pretraining
+specificity \cite{oquab2024dinov2}.
 
 \begin{table}[t]
 \caption{Protocol-A retrieval after last-4-block fine-tuning at 30\,k
