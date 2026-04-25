@@ -6,11 +6,18 @@ Paper template originally from COMP547 (Koç University) — built on the
 
 ## Building
 
-The cluster's TeX Live 2025 install is broken (kpsewhich finds neither
-`.fmt` nor `.cls` files). Build the paper on a machine with a working
-LaTeX install: Overleaf, MacTeX, TeX Live elsewhere, etc.
+On the Valar cluster:
 
-The standard build is:
+```
+./build.sh
+```
+
+`build.sh` sets the per-format kpathsea env vars the system `latex/2025`
+module forgets to set (the module's defaults silence kpathsea's standard
+search paths so nothing is found). After the script: `visword_report.pdf`
+is in this directory.
+
+Off-cluster (Overleaf, MacTeX, etc.) the standard four-pass build is:
 
 ```
 pdflatex visword_report
