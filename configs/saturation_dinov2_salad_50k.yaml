@@ -1,0 +1,31 @@
+# Track B — saturation diagnostic: DINOv2-SALAD at 50k pages × 3 ep with
+# in-loop eval every 200 steps. Outputs a 47-point R@10 vs step trajectory
+# in metrics.jsonl that becomes the saturation curve in paper §3.5.
+#
+# Walltime: 50000 / (16/4) * 3 = 9375 raw steps × ~3.85s = ~10h. Doesn't
+# fit one 7h job but the trajectory is in metrics.jsonl from the moment
+# the first eval fires, so a partial run still gives the shape of the
+# curve. Re-submit with --resume not yet supported; for now: run as a
+# single 7h job, accept the truncation, plot what we have.
+
+experiment_name: visword-saturation-dinov2-salad-50k
+model_kind: salad
+
+data:
+  num_train_samples: 50000
+  num_eval_samples: 2000
+
+train:
+  loss: multisim
+  k_per_page: 4
+  batch_size: 16
+  epochs: 3
+  lr_backbone: 1.0e-5
+  lr_head: 5.0e-4
+  eval_every_steps: 200    # twice as frequent as grid runs — denser saturation curve
+  num_diag_batches: 3
+
+eval:
+  k_values: [1, 5, 10, 20]
+  phase1_max_pages: 2000
+  phase2_max_queries: 200

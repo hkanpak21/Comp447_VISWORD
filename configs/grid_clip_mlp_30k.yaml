@@ -1,0 +1,24 @@
+# Track A — encoder grid: CLIP-ViT-B/16 + MLP head (CLS) at 30k pages × 3 ep.
+# lr_backbone=1e-7 (see grid_clip_salad_30k for rationale).
+
+experiment_name: visword-grid-clip-mlp-30k
+model_kind: clip_cls
+
+data:
+  num_train_samples: 30000
+  num_eval_samples: 2000
+
+train:
+  loss: multisim
+  k_per_page: 4
+  batch_size: 16
+  epochs: 3
+  lr_backbone: 1.0e-7
+  lr_head: 5.0e-4
+  eval_every_steps: 400
+  num_diag_batches: 3
+
+eval:
+  k_values: [1, 5, 10, 20]
+  phase1_max_pages: 2000
+  phase2_max_queries: 200

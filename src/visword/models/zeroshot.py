@@ -27,6 +27,29 @@ from visword.config import Config
 from visword.models.salad_bridge import OfficialDINOv2
 
 
+# Dataset transform applies ImageNet normalisation. Encoders trained with
+# different stats need inline renormalisation in their forward pass; this
+# helper avoids per-encoder dataset variants.
+_IMAGENET_MEAN = (0.485, 0.456, 0.406)
+_IMAGENET_STD = (0.229, 0.224, 0.225)
+
+
+def _renorm_module(target_mean: tuple[float, float, float],
+                   target_std: tuple[float, float, float]) -> nn.Module:
+    """Inline ImageNet→target renormalisation as registered buffers."""
+    class _Renorm(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            def _t(v): return torch.tensor(v).view(1, 3, 1, 1)
+            self.register_buffer("_in_mean", _t(_IMAGENET_MEAN))
+            self.register_buffer("_in_std", _t(_IMAGENET_STD))
+            self.register_buffer("_tgt_mean", _t(target_mean))
+            self.register_buffer("_tgt_std", _t(target_std))
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return (x * self._in_std + self._in_mean - self._tgt_mean) / self._tgt_std
+    return _Renorm()
+
+
 class ZeroShotDINOv2(nn.Module):
     """Frozen DINOv2-ViT-B/14. Returns either the CLS token or the
     mean-pooled patch features, L2-normalised.
@@ -72,7 +95,16 @@ class ZeroShotDINOv2(nn.Module):
 
 class ZeroShotCLIPImage(nn.Module):
     """Row 6 — CLIP-ViT-B/16 image branch, frozen. Returns the 512-d image
-    projection, L2-normed."""
+    projection, L2-normed.
+
+    Adds inline ImageNet→CLIP renormalisation (the dataset transform
+    applies ImageNet stats; CLIP was pretrained with its own mean/std).
+    Older runs of this class did *not* renormalise — those R@k numbers
+    are a few points off as a result.
+    """
+
+    _CLIP_MEAN = (0.48145466, 0.4578275, 0.40821073)
+    _CLIP_STD = (0.26862954, 0.26130258, 0.27577711)
 
     def __init__(self, cfg: Config) -> None:
         super().__init__()
@@ -81,6 +113,7 @@ class ZeroShotCLIPImage(nn.Module):
             'ViT-B-16', pretrained='openai')
         for p in self.model.parameters():
             p.requires_grad = False
+        self.renorm = _renorm_module(self._CLIP_MEAN, self._CLIP_STD)
 
     @property
     def descriptor_dim(self) -> int:
@@ -88,6 +121,7 @@ class ZeroShotCLIPImage(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         with torch.no_grad():
+            x = self.renorm(x)
             return F.normalize(self.model.encode_image(x).float(), p=2, dim=-1)
 
 
@@ -145,7 +179,135 @@ class DINOv2LinearProbe(nn.Module):
         return F.normalize(self.head(cls_token), p=2, dim=-1)
 
 
+class ZeroShotSigLIP(nn.Module):
+    """Frozen SigLIP-ViT-B/16 image branch (Zhai 2023; sigmoid pairwise loss).
+
+    The SigLIP ↔ CLIP comparison isolates *loss form* (sigmoid vs softmax
+    InfoNCE) under matched architecture, data, and image-text supervision.
+    Both image and text dims are 768 for the base model, but
+    ``encode_image`` returns the *projection* used in the contrastive loss.
+    """
+
+    HF_NAME = "google/siglip-base-patch16-224"
+
+    # SigLIP preprocessor uses [-1, 1] range (mean=0.5, std=0.5).
+    _SIGLIP_MEAN = (0.5, 0.5, 0.5)
+    _SIGLIP_STD = (0.5, 0.5, 0.5)
+
+    def __init__(self, cfg: Config) -> None:
+        super().__init__()
+        from transformers import AutoModel
+        self.model = AutoModel.from_pretrained(self.HF_NAME)
+        for p in self.model.parameters():
+            p.requires_grad = False
+        self.renorm = _renorm_module(self._SIGLIP_MEAN, self._SIGLIP_STD)
+
+    @property
+    def descriptor_dim(self) -> int:
+        return int(self.model.config.vision_config.hidden_size)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        with torch.no_grad():
+            x = self.renorm(x)
+            feats = self.model.get_image_features(pixel_values=x).float()
+        return F.normalize(feats, p=2, dim=-1)
+
+
+class ZeroShotSigLIPText(nn.Module):
+    """SigLIP text branch — companion to ZeroShotSigLIP for the Platonic grid."""
+
+    HF_NAME = "google/siglip-base-patch16-224"
+
+    def __init__(self, cfg: Config | None = None) -> None:
+        super().__init__()
+        from transformers import AutoModel, AutoTokenizer
+        self.model = AutoModel.from_pretrained(self.HF_NAME)
+        self.tokenizer = AutoTokenizer.from_pretrained(self.HF_NAME)
+        for p in self.model.parameters():
+            p.requires_grad = False
+
+    @property
+    def descriptor_dim(self) -> int:
+        return int(self.model.config.text_config.hidden_size)
+
+    @torch.no_grad()
+    def encode_text(self, texts: list[str], device: torch.device | str = "cpu") -> torch.Tensor:
+        enc = self.tokenizer(texts, padding="max_length", truncation=True,
+                             max_length=64, return_tensors="pt").to(device)
+        feats = self.model.get_text_features(**enc).float()
+        return F.normalize(feats, p=2, dim=-1)
+
+
+class ZeroShotPlainViT(nn.Module):
+    """Random-init ViT-B/16, frozen — sanity floor for the encoder grid.
+
+    Tests whether *any* reasonable initialisation gives non-trivial retrieval
+    on Wikipedia screenshots, distinguishing "pretraining did something" from
+    "the architecture alone is enough."
+    """
+
+    SEED = 1234
+
+    def __init__(self, cfg: Config) -> None:
+        super().__init__()
+        import timm
+        # Deterministic random init so two zero-shot runs agree.
+        prev = torch.random.get_rng_state()
+        torch.manual_seed(self.SEED)
+        try:
+            self.vit = timm.create_model(
+                "vit_base_patch16_224", pretrained=False, num_classes=0)
+        finally:
+            torch.random.set_rng_state(prev)
+        for p in self.vit.parameters():
+            p.requires_grad = False
+
+    @property
+    def descriptor_dim(self) -> int:
+        return 768
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        with torch.no_grad():
+            return F.normalize(self.vit(x).float(), p=2, dim=-1)
+
+
+class ZeroShotIJepa(nn.Module):
+    """Frozen I-JEPA encoder (Assran 2023) — image-only predictive
+    pretraining, no text supervision. Tests whether predictive objectives
+    induce text-aligned representations without the contrastive crutch.
+
+    Loads ``facebook/ijepa_vith14_1k`` from HuggingFace transformers (the
+    ViT-H/14 variant; I-JEPA's released models are H-scale, no B variant
+    publicly). Note: this is the *only* encoder in the grid that is not
+    ViT-B; documented as an asymmetry — it participates in the Platonic
+    alignment grid but not in the matched-architecture RQ2 retrieval
+    comparison.
+    """
+
+    HF_NAME = "facebook/ijepa_vith14_1k"
+
+    def __init__(self, cfg: Config | None = None) -> None:
+        super().__init__()
+        from transformers import AutoModel
+        self.model = AutoModel.from_pretrained(self.HF_NAME)
+        for p in self.model.parameters():
+            p.requires_grad = False
+
+    @property
+    def descriptor_dim(self) -> int:
+        return int(self.model.config.hidden_size)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # I-JEPA returns BaseModelOutput; pool patch tokens (no CLS).
+        with torch.no_grad():
+            out = self.model(pixel_values=x)
+            # last_hidden_state: (B, num_patches, hidden_size). Mean-pool.
+            feats = out.last_hidden_state.mean(dim=1).float()
+        return F.normalize(feats, p=2, dim=-1)
+
+
 __all__ = [
     "ZeroShotDINOv2", "ZeroShotCLIPImage", "ZeroShotImageNetViT",
+    "ZeroShotSigLIP", "ZeroShotSigLIPText", "ZeroShotPlainViT", "ZeroShotIJepa",
     "DINOv2LinearProbe",
 ]

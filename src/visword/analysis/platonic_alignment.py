@@ -155,6 +155,109 @@ def encode_clip_text(titles, device):
     return np.concatenate(embeds)
 
 
+def _imagenet_tf():
+    from torchvision import transforms
+    return transforms.Compose([
+        transforms.Resize(224), transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
+
+
+def encode_siglip_image(paths, device):
+    """SigLIP-ViT-B/16 image branch; sigmoid pairwise loss (Zhai 2023)."""
+    from transformers import AutoModel, AutoImageProcessor
+    HF = "google/siglip-base-patch16-224"
+    model = AutoModel.from_pretrained(HF).to(device).eval()
+    proc = AutoImageProcessor.from_pretrained(HF)
+    from PIL import Image
+    embeds = []
+    for i in range(0, len(paths), 16):
+        imgs = [Image.open(p).convert("RGB") for p in paths[i:i+16]]
+        batch = proc(images=imgs, return_tensors="pt").to(device)
+        with torch.no_grad():
+            e = F.normalize(model.get_image_features(**batch).float(), p=2, dim=-1)
+        embeds.append(e.cpu().numpy())
+    return np.concatenate(embeds)
+
+
+def encode_siglip_text(titles, device):
+    """SigLIP text branch; the text-side counterpart to encode_siglip_image."""
+    from transformers import AutoModel, AutoTokenizer
+    HF = "google/siglip-base-patch16-224"
+    model = AutoModel.from_pretrained(HF).to(device).eval()
+    tok = AutoTokenizer.from_pretrained(HF)
+    embeds = []
+    for i in range(0, len(titles), 32):
+        enc = tok(titles[i:i+32], padding="max_length", truncation=True,
+                  max_length=64, return_tensors="pt").to(device)
+        with torch.no_grad():
+            e = F.normalize(model.get_text_features(**enc).float(), p=2, dim=-1)
+        embeds.append(e.cpu().numpy())
+    return np.concatenate(embeds)
+
+
+def encode_imagenet_vit(paths, device):
+    """ImageNet-21k+1k supervised ViT-B/16 (timm); label-supervised baseline."""
+    import timm
+    model = timm.create_model("vit_base_patch16_224.augreg_in21k_ft_in1k",
+                              pretrained=True, num_classes=0).to(device).eval()
+    tf = _imagenet_tf()
+    from PIL import Image
+    embeds = []
+    for i in range(0, len(paths), 16):
+        batch = torch.stack([tf(Image.open(p).convert("RGB")) for p in paths[i:i+16]]).to(device)
+        with torch.no_grad():
+            e = F.normalize(model(batch).float(), p=2, dim=-1)
+        embeds.append(e.cpu().numpy())
+    return np.concatenate(embeds)
+
+
+def encode_plain_vit(paths, device):
+    """Random-init ViT-B/16 sanity floor — fixed seed 1234 for reproducibility."""
+    import timm
+    prev = torch.random.get_rng_state()
+    torch.manual_seed(1234)
+    try:
+        model = timm.create_model("vit_base_patch16_224", pretrained=False,
+                                  num_classes=0).to(device).eval()
+    finally:
+        torch.random.set_rng_state(prev)
+    tf = _imagenet_tf()
+    from PIL import Image
+    embeds = []
+    for i in range(0, len(paths), 16):
+        batch = torch.stack([tf(Image.open(p).convert("RGB")) for p in paths[i:i+16]]).to(device)
+        with torch.no_grad():
+            e = F.normalize(model(batch).float(), p=2, dim=-1)
+        embeds.append(e.cpu().numpy())
+    return np.concatenate(embeds)
+
+
+def encode_ijepa(paths, device):
+    """I-JEPA encoder (Assran 2023) — image-only predictive pretraining.
+
+    Uses ``facebook/ijepa_vith14_1k`` (ViT-H/14, the smallest publicly
+    released variant). Pools patch tokens with mean. Note: H-scale
+    breaks the ViT-B fair-comparison policy; documented as an asymmetry.
+    """
+    from transformers import AutoModel, AutoImageProcessor
+    HF = "facebook/ijepa_vith14_1k"
+    model = AutoModel.from_pretrained(HF).to(device).eval()
+    proc = AutoImageProcessor.from_pretrained(HF)
+    from PIL import Image
+    embeds = []
+    for i in range(0, len(paths), 8):  # H/14 is heavier — smaller batch
+        imgs = [Image.open(p).convert("RGB") for p in paths[i:i+8]]
+        batch = proc(images=imgs, return_tensors="pt").to(device)
+        with torch.no_grad():
+            out = model(**batch)
+            pooled = out.last_hidden_state.mean(dim=1).float()
+            e = F.normalize(pooled, p=2, dim=-1)
+        embeds.append(e.cpu().numpy())
+    return np.concatenate(embeds)
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -164,9 +267,11 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cache-dir", type=Path,
                         default="/scratch/hkanpak21/VISWORD/data/wiki_ss")
-    parser.add_argument("--n-samples", type=int, default=500)
+    parser.add_argument("--n-samples", type=int, default=1000)
     parser.add_argument("--encoders", nargs="+",
-                        default=["dinov2", "clip_image", "bert", "minilm", "clip_text"])
+                        default=["dinov2", "clip_image", "siglip_image", "imagenet_vit",
+                                 "plain_vit", "ijepa",
+                                 "bert", "minilm", "clip_text", "siglip_text"])
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -200,6 +305,21 @@ def main() -> int:
     if "clip_text" in args.encoders:
         print("encoding CLIP text...", flush=True)
         encoders["clip_text"] = encode_clip_text(titles, device); print(f"  {time.time()-t0:.0f}s")
+    if "siglip_image" in args.encoders:
+        print("encoding SigLIP image...", flush=True)
+        encoders["siglip_image"] = encode_siglip_image(img_paths, device); print(f"  {time.time()-t0:.0f}s")
+    if "siglip_text" in args.encoders:
+        print("encoding SigLIP text...", flush=True)
+        encoders["siglip_text"] = encode_siglip_text(titles, device); print(f"  {time.time()-t0:.0f}s")
+    if "imagenet_vit" in args.encoders:
+        print("encoding ImageNet-21k ViT-B/16...", flush=True)
+        encoders["imagenet_vit"] = encode_imagenet_vit(img_paths, device); print(f"  {time.time()-t0:.0f}s")
+    if "plain_vit" in args.encoders:
+        print("encoding random-init ViT-B/16 (sanity floor)...", flush=True)
+        encoders["plain_vit"] = encode_plain_vit(img_paths, device); print(f"  {time.time()-t0:.0f}s")
+    if "ijepa" in args.encoders:
+        print("encoding I-JEPA-H/14...", flush=True)
+        encoders["ijepa"] = encode_ijepa(img_paths, device); print(f"  {time.time()-t0:.0f}s")
 
     # Compute alignment matrix
     names = list(encoders.keys())
