@@ -77,6 +77,29 @@ CELLS = [
         "cd /content/visword && git log -1 --oneline",
     ),
     md(
+        "### 2b. (Only if needed) BUNDLE FALLBACK",
+        "",
+        "Run this cell **only** if the cluster's local commits aren't yet on GitHub `main` "
+        "(see `notebooks/README.md`, Option C). Upload the cluster's "
+        "`share/visword_local.bundle` to `MyDrive/visword_bundles/visword_local.bundle` "
+        "first. If GitHub `main` already has the latest code, **skip** this cell.",
+    ),
+    code(
+        "# BUNDLE FALLBACK — uncomment if GitHub main is behind the cluster's master.",
+        "import os, subprocess",
+        "BUNDLE_PATH = '/content/drive/MyDrive/visword_bundles/visword_local.bundle'",
+        "if False:    # set to True only if you're using Option C",
+        "    assert os.path.exists(BUNDLE_PATH), f'upload bundle to {BUNDLE_PATH} first'",
+        "    subprocess.run(['git', 'fetch', BUNDLE_PATH,",
+        "                    'refs/heads/master:cluster-master'],",
+        "                   cwd='/content/visword', check=True)",
+        "    subprocess.run(['git', 'reset', '--hard', 'cluster-master'],",
+        "                   cwd='/content/visword', check=True)",
+        "    print('cluster commits applied; HEAD now =',",
+        "          subprocess.check_output(['git', 'log', '-1', '--oneline'],",
+        "                                  cwd='/content/visword', text=True).strip())",
+    ),
+    md(
         "## 3. Install dependencies",
         "",
         "Colab images come with `torch` / `transformers`; we top up the rest. ~1 minute.",
