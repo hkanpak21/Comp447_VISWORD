@@ -507,24 +507,53 @@ specificity \cite{oquab2024dinov2}.
 
 \begin{table}[t]
 \caption{Protocol-A retrieval after last-4-block fine-tuning at 30\,k
-training pages $\times$ 3 epochs, single seed. Compared against the
-zero-shot baseline (\(\Delta\)) and against the legacy crop-vs-crop
-metric on the same checkpoint (which inflated R@10 by
-\TODO{$\sim$0.YY} on average).}
+training pages $\times$ 3 epochs, single seed. $\Delta$ vs.\ ZS is
+the change in R@10 from the same encoder's zero-shot baseline
+(Table~\ref{tab:retrieval_zeroshot}). CLIP/SigLIP fine-tunes use
+$\eta_{\text{bb}}{=}10^{-7}$ to avoid the catastrophic collapse seen
+at $\eta_{\text{bb}}{=}10^{-5}$ on these backbones; even at this
+conservative rate, CLIP-MLP collapses (rightmost row). Saturation
+50k row repeated from Table~\ref{tab:saturation} for context.}
 \label{tab:retrieval_finetune}
 \centering
 \small
-\begin{tabular}{lcccc}
+\begin{tabular}{lccc}
 \toprule
-Encoder + head & R@1 & R@10 & $\Delta$ vs ZS & legacy R@10 \\
+Encoder + head & R@1 & R@10 & $\Delta$ vs ZS \\
 \midrule
-DINOv2 + MLP    & \TODO{} & \TODO{} & \TODO{} & \TODO{} \\
-DINOv2 + SALAD  & \TODO{} & \TODO{} & \TODO{} & \TODO{} \\
-CLIP + MLP      & \TODO{} & \TODO{} & \TODO{} & \TODO{} \\
-CLIP + SALAD    & \TODO{} & \TODO{} & \TODO{} & \TODO{} \\
+DINOv2 + MLP   & 0.351 & 0.787 & $+0.729$ \\
+DINOv2 + SALAD & 0.512 & \textbf{0.880} & $+0.822$ \\
+DINOv2 + SALAD (50k) & \textbf{0.569} & \textbf{0.915} & $+0.857$ \\
+CLIP + SALAD   & 0.601 & 0.724 & $-0.055$ \\
+CLIP + MLP     & 0.000 & 0.000 & ($-$) collapsed \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+\textbf{(i) Fine-tuning DINOv2 closes most of the CLIP gap and SALAD
+beats MLP at matched backbone.} Last-4-block fine-tuning of DINOv2
+lifts Protocol-A R@10 from $0.058$ (zero-shot) to $0.787$ with an
+MLP head and to $0.880$ with the SALAD aggregator --- closing
+all but $\sim$5\,pp of the gap to zero-shot CLIP (0.779) with a
+$\sim$300$\times$-smaller training corpus than CLIP saw at
+pretraining. The SALAD aggregator gives $+0.093$ R@10 over the MLP
+head at the same backbone. Scaling the same SALAD recipe to 50\,k
+training pages reaches R@10$\,=\,$0.915, exceeding zero-shot CLIP.
+
+\textbf{(ii) CLIP fine-tuning at the conservative $\eta_{\text{bb}}{=}10^{-7}$
+hurts more than it helps.} CLIP-SALAD drops $-5.5$\,pp R@10 from
+its own zero-shot baseline, with the sanity gap shrinking from
+$+0.205$ to $+0.032$ --- the fine-tune sharpened the top-1 match
+($+5.3$\,pp R@1) but compressed the overall similarity geometry.
+CLIP-MLP collapsed to a constant output by step 400 (every
+descriptor cosine $\approx 1$, R@k $= 0$ for all $k$).
+Conjecture: the stronger CLIP-MLP regularisation pressure (a
+single 768$\to$256 linear head over a heavily-pretrained
+backbone) plus the very low LR drives the system into a
+degenerate fixed point; SALAD survives because its 8\,448-d
+descriptor preserves more head-side capacity. We do not
+recommend CLIP fine-tuning at this LR for either head; multi-LR
+sweep is the proper next step.
 
 We fix the eval slice ($P=2000$ pages, seed 42) across every row of
 Tables~\ref{tab:retrieval_zeroshot} and~\ref{tab:retrieval_finetune}.
@@ -589,51 +618,67 @@ modalities or with text only partially recoverable.
 \label{sec:exp_titleblanked}
 
 \begin{table}[t]
-\caption{Phase-2 (anchor-pool) R@1 on the trained DINOv2-SALAD
-checkpoints with the top fraction of every anchor + pool image
-painted white. The trend reverses the H-OCR direction: blanking
-\emph{improves} the trained model's anchor-pool transfer, indicating
-the model had learned to over-rely on the title-bearing layout
-fingerprint. The size of the improvement scales with both blanking
-fraction and training-data size.}
+\caption{Phase-2 (anchor-pool) R@1 on \emph{every} trained
+checkpoint with the top fraction of every anchor + pool image
+painted white. The pattern is universal across the trained models:
+blanking \emph{improves} anchor-pool transfer, with larger
+improvements for larger fine-tunes. The CLIP-MLP-30k row scores
+$0.932$ across all conditions because the model collapsed and
+returns nearly-identical embeddings (Phase-2's small per-anchor pool
+makes this look high; not a real signal).}
 \label{tab:titleblanked}
 \centering
 \small
 \begin{tabular}{lcccc}
 \toprule
-Run & orig.\ R@1 & blanked-15 & blanked-30 & $\Delta_{15}$ \\
+Run & R@1 (orig.) & R@1 (b-15) & R@1 (b-30) & $\Delta_{30}$ \\
 \midrule
-DINOv2-SALAD-15k        & 0.483 & 0.763 & --- & $+$0.280 \\
-DINOv2-SALAD-50k (sat.) & 0.110 & 0.661 & 0.737 & $+$0.551 \\
+DINOv2-SALAD-15k & 0.483 & 0.763 & --- & ($+$0.280 @ 15) \\
+DINOv2-MLP-30k   & 0.169 & 0.712 & 0.763 & $+$0.594 \\
+DINOv2-SALAD-30k & 0.212 & 0.686 & 0.737 & $+$0.525 \\
+DINOv2-SALAD-50k & 0.110 & 0.661 & 0.737 & $+$0.627 \\
+CLIP-SALAD-30k   & 0.551 & 0.686 & 0.720 & $+$0.169 \\
+CLIP-MLP-30k$^\dagger$ & 0.932 & 0.932 & 0.932 & 0.000 \\
 \bottomrule
+\multicolumn{5}{l}{\footnotesize $^\dagger$ collapsed; tied
+similarity values, R@1 not informative.}
 \end{tabular}
 \end{table}
 
 The expected H-OCR test was: ``does CLIP's R@1 drop when the title
 is blanked?'' We will execute this on CLIP zero-shot in
 \S\ref{sec:disc} once the descriptor cache supports the blanked
-encoding pass for non-trained encoders. The unexpected finding from
-the trained checkpoints is the reverse: the longer DINOv2-SALAD is
-trained on Wikipedia, the more its Phase-2 anchor-pool transfer is
-\emph{hurt} by the title-region signal, and the more removing that
-region rescues it. The saturation 50k checkpoint achieves
-Protocol-A R@10$\,=\,$0.915 (better than the 15k SALAD checkpoint's
-0.840) but Phase-2 R@1$\,=\,$0.110 (much worse than the 15k
-SALAD's 0.483). Blanking the top 30\,\% of every image lifts
-Phase-2 R@1 to 0.737 --- a 6.7$\times$ improvement from a literal
-information-removal step. This is the strongest possible signal
-that the trained model has \emph{anti-learned} a feature that
-matters for the underlying retrieval task: title-region pixels
-have become a confound the model treats as the discriminative
-signal, even though for cross-set transfer they are noise.
+encoding pass for non-trained encoders. The unexpected finding
+from the trained checkpoints is the reverse, and it is universal
+across our four 30\,k fine-tunes plus the 50\,k saturation run:
+blanking the title-bearing top region of every image
+\emph{improves} Phase-2 anchor-pool R@1, with the size of the
+improvement scaling with training-data size on DINOv2 and being
+substantially smaller on CLIP. The saturation 50\,k DINOv2-SALAD
+checkpoint achieves Protocol-A R@10$\,=\,$0.915 but Phase-2
+R@1$\,=\,$0.110; blanking 30\,\% of every image lifts the latter
+to $0.737$ --- a 6.7$\times$ improvement from a literal
+information-removal step. The CLIP-SALAD-30k row tells the
+mechanism story most cleanly: starting at Phase-2 R@1$\,=\,$0.551
+(close to CLIP zero-shot's 0.932), 30\,\% blanking lifts it to
+$0.720$. Even on a backbone that arrived already well-aligned
+with text, fine-tuning on Wikipedia introduces a layout-region
+confound the trained model overweights at test time.
 
-This finding was a surprise; the original H-OCR test asked whether
-CLIP \emph{relies} on title text. The trained-model pattern
-documents a complementary pathology: heavy fine-tuning teaches the
-model to \emph{exclusively} rely on the page-chrome region that
-includes the title, to the point that erasing it improves transfer.
-A clean test of H-OCR for CLIP zero-shot remains as concrete future
-work in \S\ref{sec:disc}.
+This is the strongest possible signal that fine-tuning on a
+single visual corpus \emph{anti-learns} features that matter for
+the underlying retrieval task: layout-fingerprint pixels become a
+confound the model treats as the discriminative signal, even
+though for cross-set transfer they are noise. This finding was
+not anticipated; the original H-OCR test asked whether CLIP
+\emph{relies} on title text in the natural pretrained state. The
+trained-model pattern documents a complementary pathology: heavy
+fine-tuning teaches the model to \emph{exclusively} rely on the
+page-chrome region that includes the title, to the point that
+erasing it improves transfer. A clean test of H-OCR for CLIP
+zero-shot, plus a regularisation strategy that suppresses the
+title-region overweighting during fine-tuning, are concrete future
+work items in \S\ref{sec:disc}.
 
 \subsection{Platonic alignment grid}
 \label{sec:exp_platonic}
