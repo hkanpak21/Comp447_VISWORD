@@ -184,9 +184,14 @@ def _load_cfg(run_dir: Path) -> Config:
     return Config.model_validate(yaml.safe_load(cfg_path.read_text()))
 
 
-def _rebuild_eval_dataset(cfg: Config, *, min_text_ratio: float = 0.05) -> LightWikiScreenshotDataset:
+def _rebuild_eval_dataset(cfg: Config, *, min_text_ratio: float = 0.05,
+                          blank_page_top_frac: float = 0.0) -> LightWikiScreenshotDataset:
     """Same eval split as ``eval_phase1`` but with the in-distribution
-    ``min_text_ratio`` filter so blank crops aren't queried."""
+    ``min_text_ratio`` filter so blank crops aren't queried.
+
+    If ``blank_page_top_frac > 0`` the loader paints the top fraction
+    of every page white before cropping; this is the trained-model
+    H-OCR ablation."""
     cache_dir = Path(cfg.data.wiki_ss_cache_dir)
     manifest = M.read_manifest(cache_dir)
     num_rows = manifest["num_rows"]
@@ -205,13 +210,33 @@ def _rebuild_eval_dataset(cfg: Config, *, min_text_ratio: float = 0.05) -> Light
         min_text_ratio=min_text_ratio,
         target_size=cfg.cropper.target_size,
     )
-    return LightWikiScreenshotDataset(
+    ds = LightWikiScreenshotDataset(
         cache_dir,
         indices=eval_idx,
         cropper=eval_cropper,
         k_per_page=2,
         seed=cfg.train.seed + 1,
     )
+    # If requested, monkey-patch the dataset's image-loader to blank the
+    # top of each page before cropping. This avoids touching
+    # LightWikiScreenshotDataset internals.
+    if blank_page_top_frac > 0.0:
+        from PIL import Image, ImageDraw
+
+        def _load_with_blanking(row_idx: int):
+            row = ds.rows[row_idx]
+            with Image.open(cache_dir / row["image_path"]) as im:
+                im = im.convert("RGB")
+                im.load()
+                w, h = im.size
+                cutoff = int(round(h * blank_page_top_frac))
+                if cutoff > 0:
+                    im = im.copy()
+                    ImageDraw.Draw(im).rectangle(
+                        (0, 0, w, cutoff), fill=(255, 255, 255))
+                return ds.cropper(im)
+        ds._load_and_crop = _load_with_blanking  # type: ignore[attr-defined]
+    return ds
 
 
 def _build_model_from_cfg(cfg: Config) -> torch.nn.Module:
@@ -242,6 +267,7 @@ def _load_checkpoint(model: torch.nn.Module, ckpt_path: Path, device: torch.devi
 
 def run_protocol_a_cli(
     run_dir: Path, *, checkpoint: str = "best_phase1.pt",
+    blank_page_top_frac: float = 0.0,
 ) -> dict:
     run_dir = run_dir.resolve()
     cfg = _load_cfg(run_dir)
@@ -250,7 +276,7 @@ def run_protocol_a_cli(
         raise SystemExit(f"no checkpoint at {ckpt_path}. Run training first.")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    eval_ds = _rebuild_eval_dataset(cfg)
+    eval_ds = _rebuild_eval_dataset(cfg, blank_page_top_frac=blank_page_top_frac)
     model = _build_model_from_cfg(cfg)
     blob = _load_checkpoint(model, ckpt_path, device)
 
@@ -265,8 +291,13 @@ def run_protocol_a_cli(
         "recall": result["recall"],
         "sanity": result["sanity"],
         "min_text_ratio_for_query": 0.05,
+        "blank_page_top_frac": blank_page_top_frac,
     }
-    out_path = run_dir / "phase1_holdout.json"
+    if blank_page_top_frac > 0.0:
+        suffix = f"_blank{int(blank_page_top_frac * 100):02d}"
+    else:
+        suffix = ""
+    out_path = run_dir / f"phase1_holdout{suffix}.json"
     out_path.write_text(json.dumps(payload, indent=2))
     return payload
 
@@ -276,8 +307,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--run-dir", required=True, type=Path)
     p.add_argument("--checkpoint", default="best_phase1.pt",
                    help="filename under <run-dir>/checkpoints/")
+    p.add_argument("--blank-page-top-frac", type=float, default=0.0,
+                   help="If >0, paint the top fraction of every page "
+                        "white before cropping (H-OCR ablation).")
     args = p.parse_args(argv)
-    payload = run_protocol_a_cli(args.run_dir, checkpoint=args.checkpoint)
+    payload = run_protocol_a_cli(args.run_dir, checkpoint=args.checkpoint,
+                                 blank_page_top_frac=args.blank_page_top_frac)
     print(json.dumps(payload, indent=2))
     return 0
 
