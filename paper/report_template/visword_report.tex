@@ -1,32 +1,33 @@
 %%%%%%%% Project report — VISWORD %%%%%%%%%%%%%%%%%
-%%%%%%%% Builds with: pdflatex visword_report; bibtex visword_report; pdflatex visword_report (x2)
+%%%%%%%% Build with: ./build.sh
 
 \documentclass{article}
 
 \usepackage{microtype}
 \usepackage{graphicx}
-\usepackage{subfigure}
 \usepackage{booktabs}
 \usepackage{amsmath}
-\usepackage{amssymb}
-\usepackage{xcolor}
-
+\usepackage[table]{xcolor}
 \usepackage{hyperref}
+
 \newcommand{\theHalgorithm}{\arabic{algorithm}}
 
 \usepackage[accepted]{comp547}
 
 \icmltitlerunning{Visual Encoders for Document Retrieval}
 
-% Placeholder macro for numbers that come from queued / running jobs.
-\newcommand{\TODO}[1]{{\color{red}\textbf{TODO:}~#1}}
+% Encoder-family pastel colours, used consistently in tables and figures.
+\definecolor{cITC}{HTML}{D9E8F4}    % image-text contrastive
+\definecolor{cSSL}{HTML}{E2F0DE}    % image-only self-supervised
+\definecolor{cSUP}{HTML}{F8E1DD}    % supervised classification
+\definecolor{cRND}{HTML}{ECECEC}    % random init
+\definecolor{cFT}{HTML}{FFF1C2}     % fine-tuned (yellowish)
 
 \begin{document}
 
 \twocolumn[
-\icmltitle{Pixels over Tokens?\\
-Visual Encoders, Predictive Pretraining, and Platonic Alignment\\
-on Wikipedia Document Retrieval}
+\icmltitle{Can Vision Models Read?\\
+Probing Linguistic Structure via JEPA on Text Screenshots}
 
 \icmlsetsymbol{equal}{*}
 
@@ -35,7 +36,8 @@ on Wikipedia Document Retrieval}
 \icmlauthor{Halil \.{I}brahim Kanpak}{to}
 \end{icmlauthorlist}
 
-\icmlaffiliation{to}{Department of Computer Engineering, Ko\c{c} University, Istanbul, Turkey}
+\icmlaffiliation{to}{Department of Computer Engineering, Ko\c{c}
+University, Istanbul, Turkey}
 
 \icmlcorrespondingauthor{Halil \.{I}brahim Kanpak}{hkanpak21@ku.edu.tr}
 
@@ -45,661 +47,374 @@ on Wikipedia Document Retrieval}
 \printAffiliationsAndNotice{}
 
 \begin{abstract}
-We study whether visual encoders that read documents as images can rival
-or surpass text encoders that read the same content as tokens, using a
-Wikipedia-screenshot retrieval benchmark
-(\texttt{Tevatron/wiki-ss-corpus}) as the testbed. Our setup pairs a
-leak-free crop$\to$page protocol (Protocol~A) with a fair
-ViT-B-scale comparison across encoders trained with five distinct
-objectives: supervised classification (ImageNet ViT), self-supervised
-view-contrastive (DINOv2), image--text contrastive (CLIP, softmax
-InfoNCE), image--text contrastive (SigLIP, sigmoid pairwise), and
-image-only predictive (I-JEPA). We frame three questions. \textbf{(Q1)}
-When and why does a visual encoder outperform a strong BERT-style text
-encoder on the same documents? \textbf{(Q2)} Can a JEPA-style
-predictive image encoder, which never sees text during pretraining,
-attain CLIP-level multimodal alignment through a small post-hoc text
-adapter? \textbf{(Q3)} How does the Platonic Representation Hypothesis
-\cite{huh2024platonic} explain the cross-encoder ordering, and does
-LEACE-style causal erasure \cite{belrose2023leace} of layout-region or
-title-region directions disambiguate ``encoded'' from ``causally used''
-features? Headline zero-shot finding ($P{=}2000$ pages, single seed): CLIP
-zero-shot achieves Protocol-A R@10$\,=\,0.779$, an enormous margin
-over DINOv2 (0.058), I-JEPA (0.015 — at chance), and ImageNet-supervised
-ViT (0.031). The gap rules out ``architecture alone explains the
-result'' (random ViT scores 0.029) and forces the explanatory burden
-onto pretraining objective. The Q3 question is left open by this
-evidence in an interesting way: I-JEPA's image-only predictive
-features are uncompetitive out-of-the-box on visual document
-retrieval, so the relevant test is whether a small post-hoc text
-adapter \cite{jose2024dinov2text} can rescue I-JEPA to CLIP-level
-performance --- and crucially, do so without the OCR-style shortcut
-behaviour CLIP is known to fall into
-\cite{lin2024parrot, materzynska2022spelling}. Title-blanked Phase-2
-and LEACE causal erasure (\S\ref{sec:exp_titleblanked},
-\S\ref{sec:exp_leace}) disambiguate the H-OCR / H-Platonic /
-H-Form hypotheses for CLIP's edge.
+We ask whether vision models acquire linguistic structure when
+their training data consists of rendered text. As a probe, we use
+retrieval over a 2\,000-page held-out slice of Wikipedia
+screenshots: given a $224{\times}224$ crop, identify its source
+page. We compare six encoders trained with five distinct
+objectives, including a joint-embedding predictive architecture
+(I-JEPA) that is the canonical image-only predictive baseline. The
+finding is sharp: image--text contrastive encoders (CLIP, SigLIP)
+retrieve at R@10 $=$~0.78 and 0.62 zero-shot, while image-only
+predictive (I-JEPA), self-supervised contrastive (DINOv2),
+supervised classification (ImageNet ViT), and random-init plain ViT
+all sit at R@10 $\le 0.058$. I-JEPA in particular scores
+\emph{below} random initialisation. Across the six encoders,
+mutual-$k$NN alignment with text encoders rank-correlates with
+retrieval R@10 at Spearman $\rho = 0.83$ ($p = 0.04$), supporting
+the Platonic Representation Hypothesis as the explanatory axis.
+Fine-tuning DINOv2 with a SALAD aggregator on 50\,k pages reaches
+R@10 $=$~0.915, exceeding zero-shot CLIP, but every fine-tuned
+checkpoint exhibits a layout-fingerprint failure mode: erasing the
+top 30\,\% of every test image \emph{improves} cross-set transfer
+by up to $6.7\times$, indicating the model learns to overweight
+the title region rather than read content.
 \end{abstract}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.9\textwidth]{figures/sysDiagram.pdf}
+\caption{The two retrieval paradigms compared in this paper. The
+\emph{text} pipeline (top) extracts characters with an OCR tool and
+encodes them with a text encoder. The \emph{visual} pipeline
+(bottom) feeds the rendered document image directly into a vision
+encoder. We study the visual pipeline because it bypasses OCR
+errors, multilingual tokeniser failures, and layout discarding,
+and because it admits image queries (e.g.\ a crop of an unknown
+page) for which no text exists.}
+\label{fig:sys}
+\end{figure*}
 
 \section{Introduction}
 \label{sec:intro}
 
-A document is a hybrid object: a sequence of glyphs that together form
-text, embedded in a visual layout that itself carries meaning (titles,
-infoboxes, captions, figures, tables). Retrieval over documents has
-two natural extremes. On one end, text-only encoders such as
-BERT~\cite{devlin2019bert} read OCR'd or extracted text and ignore
-layout. On the other end, image-only encoders such as DINOv2
-\cite{oquab2024dinov2} or CLIP's image branch~\cite{radford2021clip}
-treat the document as a screenshot and ignore the explicit token
-stream. Pixel-based language models~\cite{rust2023pixel,
-tschannen2023clippo, lee2023pix2struct} sit in between, training on
-rendered text but evaluated on standard NLP benchmarks. ColPali
-\cite{faysse2025colpali} recently showed that direct image-only
-retrieval over screenshots, with late interaction, can be competitive
-with strong OCR+text pipelines on document QA.
+Documents combine glyph sequences with visual layout. A vision
+encoder trained on rendered text could in principle acquire two
+distinct kinds of structure: (i)~glyph-level reading (recognising
+words and characters as visual patterns), and (ii)~layout-level
+structure (titles, infoboxes, lists, figures, captions). The two
+pipelines in Figure~\ref{fig:sys} operationalise the alternatives:
+the text pipeline OCRs the page and encodes characters; the visual
+pipeline encodes the screenshot directly. The visual pipeline is
+attractive when text extraction is unreliable (degraded scans,
+formula-heavy or multilingual content) or when the query is itself
+a visual crop with no text available, but it places the burden of
+``reading'' on the encoder.
 
-This paper takes the visual-document-retrieval task as a controlled
-setting in which to ask a specific cluster of questions about
-\emph{what visual encoders learn that text encoders miss, and why}.
-We organise the contribution around three positioning questions.
+We probe whether modern vision encoders read in this sense by
+measuring how well they retrieve Wikipedia source pages from
+$224{\times}224$ crops. The probe is informative because the visual
+content \emph{is} the text: an encoder that genuinely reads should
+match an encoder that operates on the underlying string. We compare
+five families:
 
-\paragraph{Q1 (visual vs.\ text encoders).} Why might a vision encoder
-that reads the document as a screenshot retrieve documents
-\emph{better} than a text encoder that reads the underlying text? The
-naive expectation is the opposite: BERT can read every glyph; a
-14$\times$14-pixel patch encoder operating on a 224$\times$224 crop
-cannot resolve body text. Yet several mechanisms make the visual side
-competitive: (i)~visual encoders capture \emph{layout structure}
-(presence of an infobox, position of a header, list bullets, figure
-placement) that text-only encoders discard during plaintext
-extraction; (ii)~visual encoders are immune to OCR errors,
-out-of-vocabulary tokens, multilingual scripts, formulas, and
-non-Latin glyphs; (iii)~when the query itself is a visual crop
-(scrolling through a long page, snapshot of a section), the visual
-encoder is the natural matcher. Our experimental task isolates these
-mechanisms because the query is a $224\times224$ crop with no
-side-channel text and the gallery is the source-page representation.
-We measure layout-class linear probe accuracy as a direct test of
-mechanism~(i).
+\begin{itemize}
+\item \textbf{Image--text contrastive} (CLIP, SigLIP) --- learns by
+matching images and captions; sees text indirectly.
+\item \textbf{Image-only predictive} (I-JEPA) --- the canonical
+joint-embedding predictive architecture; trains an image encoder
+to predict the latent representations of masked image blocks
+\cite{assran2023ijepa}. No text supervision.
+\item \textbf{Image-only contrastive} (DINOv2) --- view-contrastive
+distillation on natural images. No text supervision.
+\item \textbf{Supervised classification} (ImageNet ViT) --- ViT-B/16
+trained on ImageNet-21k+1k labels.
+\item \textbf{Random initialisation} --- a frozen ViT-B/16 sanity
+floor.
+\end{itemize}
 
-\paragraph{Q2 (predictive vs.\ contrastive multimodal).}
-Image--text contrastive pretraining (CLIP, SigLIP) requires
-billion-scale (image, caption) corpora and produces representations
-heavily entangled with the OCR-like behaviour of glyph
-recognition~\cite{lin2024parrot, materzynska2022spelling}. JEPA-family
-encoders (I-JEPA~\cite{assran2023ijepa},
-V-JEPA~\cite{bardes2024vjepa}) achieve self-supervision by predicting
-masked-block representations in latent space, requiring no text and
-no augmentation invariance. We ask whether a JEPA-pretrained image
-encoder can attain CLIP-level cross-modal retrieval performance
-through a small post-hoc text adapter trained only on
-(\texttt{page-screenshot}, \texttt{page-title}) pairs from
-Wikipedia~\cite{jose2024dinov2text}. If yes, this provides a
-text-supervision-free path to multimodal alignment.
+Three questions:
 
-\paragraph{Q3 (Platonic alignment as the explanatory frame).} The
-Platonic Representation Hypothesis~\cite{huh2024platonic} predicts
-that encoders trained on diverse objectives converge toward a shared
-representation, and that alignment between an image encoder and a
-text encoder should \emph{predict} downstream cross-modal performance.
-We measure debiased CKA~\cite{murphy2024align}, mutual-kNN, and
-Procrustes distance for every \emph{(image encoder, text encoder)}
-pair on a fixed eval slice and ask whether the alignment ordering
-matches the retrieval ordering. We further use
-LEACE~\cite{belrose2023leace} to causally erase the title-region
-direction and the layout-class direction from each encoder's
-descriptors and re-measure both retrieval and Platonic alignment, so
-encoded features are distinguished from causally used ones.
+\textbf{Q1 (zero-shot reading).} Which pretraining produces image
+representations from which the source page can be retrieved
+zero-shot?
 
-\paragraph{Contributions.} (1)~A leak-free crop$\to$page retrieval
-protocol with leave-one-crop-out gallery aggregation that, when
-applied to four previously trained checkpoints, drops headline
-R@10 from \TODO{0.92$^*$} to \TODO{0.YY} and exposes the
-template-fingerprint inflation of the original metric. (2)~A
-ViT-B-scale fair-comparison grid across five pretraining objectives
-plus a random-init sanity floor, evaluated zero-shot and after
-last-4-block fine-tuning, with the resulting cross-encoder
-performance ordering. (3)~A Platonic-alignment grid across five
-image and four text encoders on the same eval slice, paired with a
-LEACE causal-erasure analysis showing which directions in each
-encoder's representation are causally used for retrieval.
-(4)~A title-blanked Phase-2 protocol that quantifies
-``CLIP-as-OCR'' behaviour: the drop in R@1 when the top 15\,\% of
-every anchor and pool image is whited out. (5)~A negative finding
-on perceptual-hash visual deduplication of Wikipedia screenshots
-that motivates content-based dedup as future work.
+\textbf{Q2 (JEPA specifically).} Does I-JEPA, an image-only
+predictive objective with no text supervision, acquire any
+linguistic structure detectable through retrieval?
+
+\textbf{Q3 (the Platonic axis).} Does the Platonic Representation
+Hypothesis \cite{huh2024platonic} --- which predicts that encoders
+trained on diverse objectives converge to a shared abstract
+representation --- explain the retrieval ordering quantitatively?
+We measure each image encoder's mutual-$k$NN alignment with text
+encoders on the same content and ask whether alignment predicts
+retrieval performance.
+
+\textbf{Contributions.}
+(1)~A leak-free crop$\rightarrow$page protocol with leave-one-out
+gallery aggregation.
+(2)~A six-encoder zero-shot grid showing image--text contrastive
+encoders dominating the four image-only baselines, with I-JEPA
+sitting \emph{below} random initialisation.
+(3)~A Platonic alignment grid producing the rank correlation
+$\rho = 0.83$ between alignment and retrieval, statistically
+significant at $n = 6$.
+(4)~A reproducible failure mode in every fine-tuned checkpoint:
+erasing the top 15--30\,\% of every test image
+\emph{improves} cross-set transfer, indicating the model
+overweights a layout confound rather than reading content.
 
 \section{Related Work}
 \label{sec:related}
 
-\subsection{Pixel-based language models and visual document AI}
+\textbf{Pixel-based language models and document AI.} PIXEL
+\cite{rust2023pixel}, CLIPPO \cite{tschannen2023clippo} and
+Pix2Struct \cite{lee2023pix2struct} all train transformers on
+rendered text and demonstrate that pixel inputs can match or exceed
+tokenised text on downstream tasks. ColPali
+\cite{faysse2025colpali} produces multi-vector page embeddings via
+late interaction and shows that direct visual retrieval over
+screenshots competes with text+OCR pipelines on the ViDoRe
+benchmark. We adopt a simpler single-vector setup to keep our six
+encoders comparable on identical infrastructure.
 
-PIXEL~\cite{rust2023pixel} re-renders text into images and reaches
-BERT-level GLUE on English while exceeding it on non-Latin scripts.
-CLIPPO~\cite{tschannen2023clippo} trains a single CLIP-style ViT on
-image-and-rendered-alt-text, demonstrating that a contrastive
-objective alone suffices to learn meaningful pixel-text alignment.
-Pix2Struct~\cite{lee2023pix2struct} parses masked webpage screenshots
-into simplified HTML; PIXAR~\cite{tai2024pixar} extends this to
-autoregressive generation. Lotz et al.~\cite{lotz2023rendering}
-systematically studied rendering and discovered an anisotropic
-patch-embedding space driven by patch-frequency bias, the visual
-analogue of subword frequency effects. PIXEL-M4~\cite{kesen2025pixelm4}
-extended this multilingually.
+\textbf{Self-supervised vision and post-hoc text alignment.}
+DINOv2 \cite{oquab2024dinov2} learns image features via
+view-contrastive distillation; I-JEPA \cite{assran2023ijepa} learns
+them by predicting masked-block representations. Jose et al.\
+\cite{jose2024dinov2text} showed that a small text encoder aligned
+post-hoc to a frozen DINOv2 reaches CLIP-level zero-shot
+classification, suggesting that self-supervised image features
+already contain a linguistically-decodable structure. We test the
+analogous claim for I-JEPA on document screenshots.
 
-In document AI proper, ColPali~\cite{faysse2025colpali} produces
-ColBERT-style multi-vector embeddings of full pages and outperforms
-strong text+OCR pipelines on the ViDoRe benchmark, suggesting
-aggregation may be the wrong design choice for document retrieval.
-DocOwl-1.5~\cite{hu2024docowl} introduces an H-Reducer that merges
-adjacent patches, addressing the same aggregation question SALAD
-\cite{izquierdo2024salad} answers in a place-recognition
-context. Donut~\cite{kim2022donut}, Nougat~\cite{blecher2023nougat},
-and LayoutLMv3~\cite{huang2022layoutlmv3} provide the OCR-free
-document-understanding baselines.
+\textbf{Image--text contrastive pretraining and OCR shortcuts.}
+CLIP \cite{radford2021clip} and SigLIP \cite{zhai2023siglip} are
+trained contrastively on image--caption pairs, with CLIP using
+softmax InfoNCE and SigLIP using a sigmoid pairwise loss. Both
+have been shown to read text rendered in images
+\cite{materzynska2022spelling, lin2024parrot}; we exploit this in a
+title-blanking experiment.
 
-\subsection{Self-supervised visual representation and the
-DINOv2$\to$text transfer}
+\textbf{Platonic alignment and probing.} Huh et al.\
+\cite{huh2024platonic} predict cross-encoder alignment grows with
+model and data scale; Maniparambil et al.\
+\cite{maniparambil2024crossencoder} and Moayeri et al.\
+\cite{moayeri2023text2concept} measure such alignment for
+natural-image vision encoders. We extend this measurement to a
+document-screenshot domain and use mutual-$k$NN, debiased CKA
+\cite{kornblith2019cka, murphy2024align}, and Procrustes distance
+on identical 2\,000-page eval slices.
 
-DINOv2~\cite{oquab2024dinov2} produces high-quality patch features
-through a view-contrastive distillation objective with no text supervision.
-Jose et al.~\cite{jose2024dinov2text} showed that a small text
-encoder aligned post-hoc to a \emph{frozen} DINOv2 already reaches
-CLIP-level zero-shot classification: strong evidence that
-self-supervised image features already contain a linguistically
-decodable structure. I-JEPA~\cite{assran2023ijepa} replaces the
-view-invariance objective with a latent-prediction one (predict
-masked target-block representations from context-block
-representations) and avoids both contrastive and reconstruction
-losses; V-JEPA~\cite{bardes2024vjepa} extends to video. Whether
-JEPA's predictive objective induces text-alignable features as well
-as DINOv2's contrastive one does is, to our knowledge, untested.
-This paper's Q2 is one such test on document screenshots.
+\section{Method}
+\label{sec:method}
 
-\subsection{Image--text contrastive pretraining and OCR shortcuts}
-
-CLIP~\cite{radford2021clip} learns a shared image--text embedding via
-contrastive learning over web image--caption pairs; SigLIP
-\cite{zhai2023siglip} replaces CLIP's softmax InfoNCE with a sigmoid
-pairwise loss, enabling scaling and yielding small but consistent
-improvements on zero-shot benchmarks. Both have been shown to ``read''
-text rendered in images: Goh et al.~\cite{goh2021typographic}
-introduced typographic attacks, Materzy{\'n}ska
-et al.~\cite{materzynska2022spelling} demonstrated that spelling and
-meaning are partially separable subspaces in CLIP, and Lin et
-al.~\cite{lin2024parrot} estimated that $\sim$50\,\% of LAION-2B
-captions verbatim repeat text-in-image, explaining CLIP's strong
-glyph-recognition behaviour. Yuksekgonul et
-al.~\cite{yuksekgonul2023bagofwords} showed CLIP/BLIP/FLAVA behave
-like bags-of-words on the ARO benchmark. We exploit these findings to
-design a title-blanked Phase-2 test (\S\ref{sec:exp_titleblanked})
-that quantifies how much of CLIP's retrieval signal on Wikipedia
-screenshots comes from OCR'ing the page title.
-
-\subsection{Platonic representation hypothesis and probing methodology}
-
-The Platonic Representation Hypothesis~\cite{huh2024platonic} predicts
-that as encoders are trained on more data and more diverse objectives,
-they converge to a shared representation, and that alignment between
-two encoders' representations on the same content should correlate
-with downstream cross-modal performance. Maniparambil et
-al.~\cite{maniparambil2024crossencoder} measured this alignment for
-natural-image vision encoders and corresponding text encoders;
-Moayeri et al.~\cite{moayeri2023text2concept} provided a single linear
-map (Text2Concept) that operationalises alignment for downstream use.
-Murphy et al.~\cite{murphy2024align} pointed out that vanilla CKA is
-biased and proposed a debiased estimator we adopt here. We use these
-metrics, plus mutual-kNN and Procrustes distance, on the
-\emph{document-screenshot} domain rather than natural images, treating
-the visual content--text content pairing as an unusually clean test
-case (the visual content \emph{is} the text).
-
-For probing, we follow the now-canonical methodology: classical
-linear probes~\cite{alain2017probing, conneau2018probing} report
-information \emph{encoded}; control-task selectivity
-\cite{hewitt2019designing} and MDL probes~\cite{voita2020mdl} avoid
-the probe-capacity confound; LEACE~\cite{belrose2023leace} provides
-a closed-form, optimal linear erasure that distinguishes
-\emph{causally used} features from merely encoded ones, building on
-the INLP~\cite{ravfogel2020inlp},
-Amnesic~\cite{elazar2021amnesic}, and RLACE~\cite{ravfogel2022rlace}
-line of causal-probing work. We do not run sparse-autoencoder
-analyses~\cite{cunningham2024saes, lieberum2024gemmascope,
-stevens2025saev} in this paper but flag them as the natural next
-step (Section~\ref{sec:disc}).
-
-\section{Approach}
-\label{sec:approach}
-
-\subsection{Task and dataset}
-\label{sec:task}
+\subsection{Data and crops}
+\label{sec:data}
 
 We use \texttt{Tevatron/wiki-ss-corpus}: $\sim$1.2\,M Wikipedia page
-screenshots paired with the page \texttt{title} and rendered body
-\texttt{text}. We hold a local cache of $\sim$376\,k pages
-(\texttt{compress\_level=1} PNG, sha256-fingerprinted manifest). For
-the anchor-pool transfer evaluation we use
-\texttt{hkanpak21/Wikipedia\_SS\_withanchors}, a 571-anchor validation
-set in which each anchor crop is paired with positives (other crops
-of the same page) and hard negatives (crops of unrelated pages); the
-effective subset on disk is $\sim$118 anchors due to upstream image
-availability constraints.
+screenshots paired with the page title and rendered body text. We
+hold a local cache of $\sim$376\,k pages. A non-overlapping cropper
+tiles each page into $490\times490$\,px crops resized to
+$224\times224$\,px. At this resolution body text is sub-pixel and
+illegible to a ViT patch encoder; only headings and the overall
+layout structure remain visually recoverable. ``Reading'' in this
+paper therefore refers to heading-level text and visual layout, not
+fluent body content.
 
-A page is rendered at a typical width of $\sim$1024 pixels and
-variable height (3\,000--6\,000 pixels for typical articles). Crops
-are produced by a non-overlapping cropper at $490\times490$ pixels
-and resized to $224\times224$ for ViT-B/14 or B/16 inputs. At this
-resolution, individual letter strokes are 1--2 pixels wide and body
-text is sub-pixel (illegible to the model); only headings and the
-overall layout structure remain visually recoverable. Any claim of
-``the model is reading'' should be read as ``the model is reading
-heading-level text and using layout fingerprints,'' not body content.
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/Training.pdf}
+\caption{Training. Each step samples four pages $\times$ four
+crops; same-page crops are positives, cross-page crops are
+negatives. The image encoder produces an L2-normalised descriptor;
+training minimises a multi-similarity contrastive loss
+\cite{wang2019msloss}. We unfreeze the last four ViT blocks
+(of twelve) and train a head on top.}
+\label{fig:train}
+\end{figure}
 
-\subsection{Protocol A: leak-free crop$\to$page retrieval}
-\label{sec:protocol_a}
+\subsection{Training (fine-tunes)}
+\label{sec:training}
 
-Earlier work on this corpus reported a Phase-1 R@10 of 0.92$^*$ for a
-DINOv2+SALAD recipe, but used a crop-vs-crop nearest-neighbour
-formulation in which $\sim$10--20 same-page positives existed in a
-pool of $\sim$20\,k crops; ``find any same-page neighbour in top
-10'' is much easier than ``find the source page of a crop.'' We
-replace this with \emph{Protocol~A}:
+We train each (encoder, head) configuration with the procedure of
+Figure~\ref{fig:train}. Each batch contains 4 pages $\times$ 4
+crops $=$ 16 images. Within a batch, crops sharing a page are
+positives; otherwise negatives. The loss is multi-similarity
+\cite{wang2019msloss}. The optimiser is AdamW with weight decay
+$10^{-4}$, gradient clip 1.0, linear warmup over 5\,\% of steps
+followed by cosine decay. Backbone learning rate is $10^{-5}$ for
+DINOv2 and $10^{-7}$ for CLIP and SigLIP (a higher rate causes
+catastrophic representation collapse on the latter two), head
+learning rate $5\times 10^{-4}$ throughout. Heads are either an
+MLP \mbox{($768\to 512\to 256$)} or the SALAD optimal-transport
+aggregator \cite{izquierdo2024salad} producing an 8\,448-d
+descriptor. Only the head and the last four ViT blocks are
+trainable. Fine-tunes use 30\,000 training pages $\times$ 3 epochs
+(5\,625 optimiser steps), one seed; the saturation
+diagnostic uses 50\,000 pages.
 
-\begin{enumerate}
-  \item For each eval page $p$ with crops $\{c_p^{(1)}, \dots, c_p^{(n_p)}\}$,
-        compute the gallery vector
-        $g_p = \operatorname{normalise}\!\bigl(\sum_i \phi(c_p^{(i)})\bigr)$
-        where $\phi$ is the encoder's L2-normed crop embedding.
-  \item For a query crop $c$ on page $q$, recompute that page's
-        gallery as $g_q^{\setminus c}
-        = \operatorname{normalise}\!\bigl(\sum_i \phi(c_q^{(i)}) - \phi(c)\bigr)$
-        (leave-one-crop-out aggregation).
-  \item Cosine-rank the $P$ gallery vectors against $\phi(c)$;
-        report R@$k$ as the fraction of queries whose true source
-        page lands in the top $k$.
-  \item Restrict queries to crops with text density $\geq 5\,\%$
-        (the training distribution) so blank/margin crops, which
-        the model never saw labelled, are not queries.
-\end{enumerate}
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/Benchmark.pdf}
+\caption{Anchor-pool benchmark (Phase 2). Each anchor crop is
+encoded with the vision encoder and ranked against a small pool
+($\sim$7 images) of positives (other crops of the same page) and
+hard negatives (crops of unrelated pages).}
+\label{fig:bench}
+\end{figure}
 
-With $P=2000$ pages, random R@1 is $1/2000 = 5\times 10^{-4}$ — a
-real retrieval task. Re-evaluating four previously trained
-checkpoints under Protocol~A yields the corrected numbers in
-Section~\ref{sec:exp_retrieval}.
+\subsection{Evaluation}
+\label{sec:eval}
 
-\subsection{Encoder ladder (ViT-B fair comparison)}
-\label{sec:encoders}
+We evaluate on a held-out slice of $P=2\,000$ pages disjoint from
+training, with two complementary protocols.
 
-We compare five image encoders, all at ViT-B scale:
+\textbf{Protocol A --- crop $\rightarrow$ page (headline metric).}
+For each query crop $c$ on page $p$ with crops
+$\{c_1,\dots,c_{n_p}\}$, the gallery vector for any page $q\neq p$
+is the L2-normalised mean of all $q$'s crop embeddings. The
+gallery vector for page $p$ is recomputed leaving the query out:
+\(g_p^{\setminus c} = \mathrm{normalise}\!\bigl(\sum_i \phi(c_i) - \phi(c)\bigr)\).
+We cosine-rank the $P$ gallery vectors against $\phi(c)$ and
+report R@$k$ as the fraction of queries whose source page lands
+in the top $k$. Random R@1 $=1/P=5\times 10^{-4}$. The
+leave-one-out aggregation forbids the trivial
+``find another crop of the same column'' shortcut implicit in
+earlier crop-vs-crop formulations of this task.
 
-\begin{itemize}
-  \item \textbf{ImageNet-21k+1k ViT-B/16} (\texttt{timm}'s
-        \texttt{vit\_base\_patch16\_224.augreg\_in21k\_ft\_in1k}):
-        supervised classification baseline.
-  \item \textbf{DINOv2 ViT-B/14}~\cite{oquab2024dinov2}:
-        self-supervised view-contrastive distillation.
-  \item \textbf{CLIP ViT-B/16}~\cite{radford2021clip}: image--text
-        contrastive with softmax InfoNCE on $\sim$400\,M LAION-style
-        pairs.
-  \item \textbf{SigLIP ViT-B/16}~\cite{zhai2023siglip}: image--text
-        contrastive with sigmoid pairwise loss; isolates loss form
-        from CLIP.
-  \item \textbf{I-JEPA ViT-H/14}~\cite{assran2023ijepa}: image-only
-        latent-prediction objective with no text supervision. The
-        publicly released I-JEPA models are H-scale; we document
-        this asymmetry and exclude I-JEPA from the
-        matched-architecture sub-comparisons.
-  \item \textbf{Random-init ViT-B/16} (deterministic seed 1234,
-        frozen): sanity floor.
-\end{itemize}
+\textbf{Protocol B --- anchor-pool transfer.} The anchor-pool
+benchmark of Figure~\ref{fig:bench} uses 118 valid validation
+triplets from \texttt{Wikipedia\_SS\_withanchors}. For each anchor
+crop, the pool is the union of its positives and hard negatives
+($\sim$7 images). We rank the pool by cosine similarity and
+report R@1. This measures cross-set transfer: anchors and pool
+images come from a different distribution of crops than what the
+model trained on.
 
-For text encoders we use BERT-base~\cite{devlin2019bert},
-MiniLM~\cite{wang2020minilm}, CLIP-text, and SigLIP-text. All are
-held frozen for zero-shot evaluation; for fine-tuning we train the
-last four blocks of the image backbone plus the head, with a
-discriminative learning rate ($\eta_{\text{bb}}=10^{-5}$ for
-image-only, $10^{-7}$ for image--text encoders to avoid the
-catastrophic collapse we observe with $10^{-5}$ on CLIP).
+\subsection{Platonic alignment}
+\label{sec:platonic}
 
-\subsection{Heads and aggregation}
-\label{sec:heads}
+For each (image encoder $E_v$, text encoder $E_t$) pair we encode
+the same 2\,000-page eval slice with both halves: image features
+$\mathbf{X} \in \mathbb{R}^{N\times d_v}$ from page screenshots,
+text features $\mathbf{Y}\in\mathbb{R}^{N\times d_t}$ from page
+titles. We report mutual-$k$NN at $k=10$ (the fraction of points
+sharing at least one of their top-10 neighbours under the two
+embeddings), debiased CKA \cite{kornblith2019cka, murphy2024align},
+and Procrustes distance. The Platonic Hypothesis predicts a
+positive rank correlation between $E_v$'s alignment and $E_v$'s
+downstream cross-modal retrieval performance. We test this
+directly in \S\ref{sec:results}.
 
-We pair each encoder with two heads: (i)~an MLP CLS head
-(768$\to$512$\to$256, L2-normed), and (ii)~the official SALAD
-optimal-transport aggregator~\cite{izquierdo2024salad}, an 8\,448-d
-descriptor formed from a token-CLS branch and a 64-cluster VLAD
-branch with a Sinkhorn assignment and a learnable ``dustbin'' for
-uninformative patches. SALAD's per-cluster aggregation provides a
-useful interpretability hook (cluster-level attention, dustbin
-mass over training); details are deferred to
-\S\ref{sec:exp_interpret}.
+\section{Results}
+\label{sec:results}
 
-\subsection{Platonic alignment measurement}
-\label{sec:platonic_method}
-
-For each (image encoder $E_v$, text encoder $E_t$) pair, we encode
-the same fixed slice of $N=1000$ Wikipedia pages: image features
-$\mathbf{X} \in \mathbb{R}^{N\times d_v}$ from page-screenshot
-encoding, text features
-$\mathbf{Y} \in \mathbb{R}^{N\times d_t}$ from page-title encoding.
-We report:
-
-\begin{itemize}
-  \item \textbf{Debiased CKA}~\cite{kornblith2019cka,
-        murphy2024align}: kernel-based representational
-        similarity, debiased to avoid the small-$N$ bias that
-        inflates classical CKA.
-  \item \textbf{Procrustes distance}: orthogonal-Procrustes optimal
-        $\|\mathbf{X}R - \mathbf{Y}\|_F$, normalised to $[0, 1]$.
-  \item \textbf{Mutual $k$-NN overlap}: fraction of points sharing
-        at least one of their top-$k$ neighbours under the two
-        embeddings, at $k=5$ and $k=10$.
-\end{itemize}
-
-The Platonic Hypothesis predicts a positive correlation between
-alignment scores and downstream Protocol-A R@10 across encoders;
-\S\ref{sec:exp_platonic} tests this directly.
-
-\subsection{LEACE causal erasure}
-\label{sec:leace_method}
-
-We use LEACE~\cite{belrose2023leace} for closed-form linear
-erasure of two protected directions:
-
-\begin{enumerate}
-  \item \textbf{Title-region direction}: estimated as the mean
-        difference between the original-image embedding and the
-        title-blanked embedding (Section~\ref{sec:exp_titleblanked}),
-        a one-dimensional projection along the gradient of
-        ``what changes when we erase the title.''
-  \item \textbf{Layout-type direction}: the column-space of a
-        five-way one-hot indicator (header / infobox / body /
-        list / figure), labelled by the spatial region from
-        which each crop was sampled.
-\end{enumerate}
-
-For each erased direction we report (i)~Protocol-A R@10
-post-erasure and (ii)~Platonic alignment with each text encoder
-post-erasure. A direction is \emph{causally used} for retrieval
-when erasing it drops R@10 substantially; merely \emph{encoded}
-when erasing leaves R@10 roughly unchanged.
-
-\subsection{JEPA + post-hoc text adapter (Q2)}
-\label{sec:adapter_method}
-
-To test whether I-JEPA's image-only features are post-hoc
-text-alignable in the manner of DINOv2~\cite{jose2024dinov2text}, we
-freeze the I-JEPA encoder and train a small linear adapter
-$A \in \mathbb{R}^{d_v \times 768}$ mapping I-JEPA image features
-into the embedding space of a frozen text encoder $E_t$
-(BERT-base or CLIP-text). The training objective is contrastive on
-(\texttt{page-screenshot}, \texttt{page-title}) pairs from
-wiki-ss with InfoNCE temperature $\tau=0.07$. We ask whether the
-adapted I-JEPA embedding $A E_v(c)$ matches the retrieval
-performance of zero-shot CLIP image features. If yes, this provides
-a text-supervision-free path to multimodal alignment that
-side-steps the OCR shortcut documented for CLIP.
-
-\section{Experiments}
-\label{sec:experiments}
-
-\subsection{Headline retrieval table}
-\label{sec:exp_retrieval}
+\subsection{Zero-shot retrieval}
 
 \begin{table}[t]
-\caption{Protocol-A retrieval (zero-shot, $P=2000$ pages, eval seed
-42, single-seed). Random R@1 $= 5\times 10^{-4}$, random R@10 $= 5
-\times 10^{-3}$. Sanity gap = same-page minus diff-page mean cosine
-similarity; positive = real discrimination.}
-\label{tab:retrieval_zeroshot}
+\caption{Protocol-A zero-shot retrieval at $P=2000$. Random R@1
+$=5\times 10^{-4}$. Encoder rows are coloured by pretraining family:
+\colorbox{cITC}{\strut\hspace{2pt}image--text contrastive\hspace{2pt}}\,
+\colorbox{cSSL}{\strut\hspace{2pt}image-only self-supervised\hspace{2pt}}\,
+\colorbox{cSUP}{\strut\hspace{2pt}supervised\hspace{2pt}}\,
+\colorbox{cRND}{\strut\hspace{2pt}random\hspace{2pt}}.
+``Gap'' is same-page minus diff-page mean cosine similarity.}
+\label{tab:zeroshot}
 \centering
 \small
 \begin{tabular}{lccccc}
 \toprule
 Encoder & R@1 & R@5 & R@10 & R@20 & gap \\
 \midrule
-ImageNet-21k ViT-B/16  & 0.009 & 0.022 & 0.031 & 0.043 & $-$0.002 \\
-DINOv2 ViT-B/14         & 0.022 & 0.043 & 0.058 & 0.075 & $+$0.010 \\
-\textbf{CLIP ViT-B/16}  & \textbf{0.548} & \textbf{0.715} & \textbf{0.779} & \textbf{0.833} & $+$0.205 \\
-SigLIP ViT-B/16         & 0.348 & 0.541 & 0.624 & 0.703 & $+$0.110 \\
-I-JEPA ViT-H/14         & 0.002 & 0.008 & 0.015 & 0.021 & $-$0.002 \\
-\midrule
-Random-init ViT-B/16    & 0.007 & 0.020 & 0.029 & 0.042 & $+$0.000 \\
+\rowcolor{cITC} CLIP ViT-B/16    & \textbf{0.548} & 0.715 & \textbf{0.779} & 0.833 & $+0.205$ \\
+\rowcolor{cITC} SigLIP ViT-B/16   & 0.348 & 0.541 & 0.624 & 0.703 & $+0.110$ \\
+\rowcolor{cSSL} DINOv2 ViT-B/14   & 0.022 & 0.043 & 0.058 & 0.075 & $+0.010$ \\
+\rowcolor{cSSL} I-JEPA ViT-H/14   & 0.002 & 0.008 & 0.015 & 0.021 & $-0.002$ \\
+\rowcolor{cSUP} ImageNet ViT-B/16 & 0.009 & 0.022 & 0.031 & 0.043 & $-0.002$ \\
+\rowcolor{cRND} Plain ViT-B/16     & 0.007 & 0.020 & 0.029 & 0.042 & $+0.000$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Three observations stand out from
-Table~\ref{tab:retrieval_zeroshot}.
+Table~\ref{tab:zeroshot} reports zero-shot Protocol-A. CLIP
+dominates at R@10 $=$~0.779, SigLIP follows at 0.624, and the four
+image-only encoders cluster near random (R@10 $=$~0.015--0.058).
+Three observations follow:
 
-\textbf{(i) Image-text contrastive pretraining dominates: CLIP at
-R@10$\,=\,$0.78 and SigLIP at 0.62 stand far above DINOv2 (0.058) and
-I-JEPA (0.015), with the random-init plain ViT at 0.029 and the
-ImageNet-supervised ViT at 0.031.} The CLIP--SigLIP gap (0.78 vs.\
-0.62) is real but small relative to the CLIP--DINOv2 gap (0.78 vs.\
-0.058 = a factor of 13$\times$). This isolates the relevant axis:
-\emph{whether} the encoder saw paired image--text data dominates
-\emph{how} that pairing was supervised (softmax InfoNCE vs.\ sigmoid
-pairwise). H-Platonic gains support over H-Form. The remaining CLIP
-edge over SigLIP is small enough to be explained by H-OCR (CLIP
-trained on web captions that often verbatim repeat image text), which
-the title-blanked Phase-2 test of \S\ref{sec:exp_titleblanked}
-addresses directly.
+(i) The largest gap is between the image--text contrastive and
+the image-only families ($\Delta$R@10 $\approx 0.57$), not between
+encoders within a family. The supervised ImageNet ViT scores 0.031
+versus 0.029 for the random-init plain ViT, so ImageNet
+classification supervision adds essentially nothing for this task.
 
-\textbf{(ii) I-JEPA zero-shot is at chance,} below the random-init
-plain ViT on every $k$ and with a marginally negative sanity gap.
-The view-invariance/contrastive DINOv2 features (R@10 = 0.058) sit
-modestly above random; the latent-prediction I-JEPA features sit
-\emph{below} random for the same architecture family. This falsifies
-the optimistic reading of Q3 (``predictive pretraining alone might
-induce text-aligned features'') in its strongest form: I-JEPA's
-out-of-the-box features are uncompetitive on visual document
-retrieval, which makes the post-hoc adapter test in
-\S\ref{sec:exp_jepa_adapter} the central remaining test of Q3.
+(ii) I-JEPA scores R@10~$=$~0.015, \emph{below} the random-init
+plain ViT (0.029). Despite ViT-H/14 being roughly 5$\times$ larger
+than the ViT-B encoders, image-only predictive pretraining
+out-of-the-box does not transfer to visual document retrieval.
+Q2's optimistic reading is therefore falsified at the zero-shot
+level: a post-hoc text adapter (\S\ref{sec:disc}) is the only
+remaining path to rescue I-JEPA.
 
-\textbf{(iii) ImageNet supervision adds essentially nothing}
-(R@10$\,=\,$0.031 vs.\ random ViT's 0.029): label-supervised
-classification on natural images does not transfer to
-document-screenshot retrieval at the page level, a finding that
-matches the broader literature on classification-pretraining
-specificity \cite{oquab2024dinov2}.
+(iii) The CLIP--SigLIP gap (0.155) is real but small relative to
+the CLIP--DINOv2 gap (0.721). The dominant predictor is whether
+the encoder saw paired image--text data, not the specific
+contrastive form (softmax vs.\ sigmoid).
+
+\subsection{Fine-tuning}
 
 \begin{table}[t]
-\caption{Protocol-A retrieval after last-4-block fine-tuning at 30\,k
-training pages $\times$ 3 epochs, single seed. $\Delta$ vs.\ ZS is
-the change in R@10 from the same encoder's zero-shot baseline
-(Table~\ref{tab:retrieval_zeroshot}). CLIP/SigLIP fine-tunes use
-$\eta_{\text{bb}}{=}10^{-7}$ to avoid the catastrophic collapse seen
-at $\eta_{\text{bb}}{=}10^{-5}$ on these backbones; even at this
-conservative rate, CLIP-MLP collapses (rightmost row). Saturation
-50k row repeated from Table~\ref{tab:saturation} for context.}
-\label{tab:retrieval_finetune}
+\caption{Protocol-A retrieval after last-4-block fine-tuning, single
+seed. ``$\Delta$ZS'' is R@10 minus the encoder's zero-shot baseline.
+Yellow rows are fine-tuned variants of the encoder above them.}
+\label{tab:finetune}
 \centering
 \small
 \begin{tabular}{lccc}
 \toprule
-Encoder + head & R@1 & R@10 & $\Delta$ vs ZS \\
+Encoder + head & R@1 & R@10 & $\Delta$ZS \\
 \midrule
-DINOv2 + MLP   & 0.351 & 0.787 & $+0.729$ \\
-DINOv2 + SALAD & 0.512 & \textbf{0.880} & $+0.822$ \\
-DINOv2 + SALAD (50k) & \textbf{0.569} & \textbf{0.915} & $+0.857$ \\
-CLIP + SALAD   & 0.601 & 0.724 & $-0.055$ \\
-CLIP + MLP     & 0.000 & 0.000 & ($-$) collapsed \\
+\rowcolor{cFT}  DINOv2 + MLP \,\,(30k)    & 0.351 & 0.787 & $+0.729$ \\
+\rowcolor{cFT}  DINOv2 + SALAD (30k)      & 0.512 & 0.880 & $+0.822$ \\
+\rowcolor{cFT}  DINOv2 + SALAD (50k)      & \textbf{0.569} & \textbf{0.915} & $+0.857$ \\
+\rowcolor{cFT}  CLIP\, + SALAD\, (30k)     & 0.601 & 0.724 & $-0.055$ \\
+\rowcolor{cFT}  CLIP\, + MLP\, (30k)$^\dagger$ & 0.000 & 0.000 & collapsed \\
 \bottomrule
+\multicolumn{4}{l}{\footnotesize $^\dagger$~Embeddings collapsed to
+a constant.}
 \end{tabular}
 \end{table}
 
-\textbf{(i) Fine-tuning DINOv2 closes most of the CLIP gap and SALAD
-beats MLP at matched backbone.} Last-4-block fine-tuning of DINOv2
-lifts Protocol-A R@10 from $0.058$ (zero-shot) to $0.787$ with an
-MLP head and to $0.880$ with the SALAD aggregator --- closing
-all but $\sim$5\,pp of the gap to zero-shot CLIP (0.779) with a
-$\sim$300$\times$-smaller training corpus than CLIP saw at
-pretraining. The SALAD aggregator gives $+0.093$ R@10 over the MLP
-head at the same backbone. Scaling the same SALAD recipe to 50\,k
-training pages reaches R@10$\,=\,$0.915, exceeding zero-shot CLIP.
+Table~\ref{tab:finetune} reports the fine-tuned grid.
+DINOv2~+~SALAD on 30\,k pages reaches R@10~$=$~0.880 and on 50\,k
+pages reaches 0.915, exceeding zero-shot CLIP (0.779). The MLP
+head on the same DINOv2 backbone scores 0.787, so the SALAD
+aggregator contributes $+9.3$\,pp R@10 over an MLP at the matched
+backbone --- consistent with the prior place-recognition result of
+\cite{izquierdo2024salad}.
 
-\textbf{(ii) CLIP fine-tuning at the conservative $\eta_{\text{bb}}{=}10^{-7}$
-hurts more than it helps.} CLIP-SALAD drops $-5.5$\,pp R@10 from
-its own zero-shot baseline, with the sanity gap shrinking from
-$+0.205$ to $+0.032$ --- the fine-tune sharpened the top-1 match
-($+5.3$\,pp R@1) but compressed the overall similarity geometry.
-CLIP-MLP collapsed to a constant output by step 400 (every
-descriptor cosine $\approx 1$, R@k $= 0$ for all $k$).
-Conjecture: the stronger CLIP-MLP regularisation pressure (a
-single 768$\to$256 linear head over a heavily-pretrained
-backbone) plus the very low LR drives the system into a
-degenerate fixed point; SALAD survives because its 8\,448-d
-descriptor preserves more head-side capacity. We do not
-recommend CLIP fine-tuning at this LR for either head; multi-LR
-sweep is the proper next step.
+CLIP fine-tuning at the conservative $\eta_{\text{bb}}=10^{-7}$
+hurts more than it helps. CLIP+SALAD loses 5.5\,pp R@10 from its
+own zero-shot baseline; the same-page minus diff-page sanity gap
+shrinks from $+0.205$ to $+0.032$, indicating the fine-tune
+sharpened the top-1 match (R@1 $+5.3$\,pp) but compressed the
+overall similarity geometry. CLIP+MLP collapsed to a constant
+output by step 400. Training CLIP at the LR that worked for
+DINOv2 ($10^{-5}$) caused immediate divergence in earlier
+attempts; $10^{-7}$ was chosen to avoid that, but evidently the
+CLIP+MLP combination cannot navigate the resulting flat-loss
+basin. A multi-LR sweep is the proper next step but is deferred.
 
-We fix the eval slice ($P=2000$ pages, seed 42) across every row of
-Tables~\ref{tab:retrieval_zeroshot} and~\ref{tab:retrieval_finetune}.
-Three observations from the zero-shot panel are anticipated by the
-literature and will be tested:
-(i)~CLIP's image-text contrastive pretraining should outperform
-DINOv2's image-only contrastive pretraining and the supervised
-baseline on Protocol-A, since wiki-ss is a text-rich domain where
-image-text contrastive supervision should transfer more directly;
-(ii)~SigLIP should match or slightly improve over CLIP per
-\cite{zhai2023siglip}, isolating loss form;
-(iii)~I-JEPA should sit between supervised and contrastive, ahead
-of DINOv2 if its predictive objective induces text-aware geometry
-as Q2 conjectures.
-
-\subsection{Visual vs.\ BERT: when do screenshots beat text?}
-\label{sec:exp_visual_vs_bert}
-
-The most important comparison for Q1 is not visual-vs-visual but
-\emph{visual-vs-text}. For a fair side-by-side, we encode the same
-pages two ways: (a)~as screenshots through each visual encoder, and
-(b)~as page titles through each text encoder. We then evaluate two
-retrieval modes:
-
-\begin{itemize}
-  \item \textbf{Mode I (image$\to$image).} Protocol-A on visual
-        encoders. Text encoders cannot participate.
-  \item \textbf{Mode II (image$\to$text).} Cross-modal: query is a
-        crop image, gallery is the page-title text encoded by
-        BERT/MiniLM/CLIP-text/SigLIP-text. The image encoder must
-        be aligned with the text space (zero-shot CLIP and SigLIP
-        do this natively; DINOv2 and I-JEPA require an adapter,
-        \S\ref{sec:adapter_method}).
-\end{itemize}
-
-\paragraph{When does visual win?} We hypothesise that visual
-encoders win in three regimes:
-(i)~when text extraction is unreliable (low-quality scans,
-multilingual content, formula-heavy pages);
-(ii)~when the query is itself a visual crop with no associated
-text;
-(iii)~when layout structure carries information the text-only
-encoder discards.
-We probe (iii) directly with a layout-class linear probe on the
-cached descriptors of each encoder: 5-way classification across
-\{header, infobox, body, list, figure\} regions. \TODO{Probe
-accuracies will be reported once descriptor cache populates.} The
-prediction is that visual encoders score substantially higher
-than text encoders on layout-class probing, while text encoders
-dominate topic-class probing.
-
-\paragraph{When does text win.} For our task, BERT-on-titles
-trivially scores R@1$=1.0$ on Phase-2 because every Wikipedia
-page has a unique title string that is a verbatim substring of
-itself. This degenerate case illustrates a real point: when the
-text query and the document text are tokenwise close, no
-visual encoder can compete. The interesting regime is the one
-visual encoders open up — query and content in different
-modalities or with text only partially recoverable.
-
-\subsection{Title-blanked Phase-2 (the ``CLIP is OCR'' test)}
-\label{sec:exp_titleblanked}
+\subsection{Platonic alignment predicts retrieval}
 
 \begin{table}[t]
-\caption{Phase-2 (anchor-pool) R@1 on \emph{every} trained
-checkpoint with the top fraction of every anchor + pool image
-painted white. The pattern is universal across the trained models:
-blanking \emph{improves} anchor-pool transfer, with larger
-improvements for larger fine-tunes. The CLIP-MLP-30k row scores
-$0.932$ across all conditions because the model collapsed and
-returns nearly-identical embeddings (Phase-2's small per-anchor pool
-makes this look high; not a real signal).}
-\label{tab:titleblanked}
+\caption{Mutual-$k$NN@10 between image and text encoders on the
+same 2\,000-page eval slice. Bold = highest entry per row.
+Row colours match Table~\ref{tab:zeroshot}.}
+\label{tab:platonic}
 \centering
 \small
 \begin{tabular}{lcccc}
 \toprule
-Run & R@1 (orig.) & R@1 (b-15) & R@1 (b-30) & $\Delta_{30}$ \\
+image $\backslash$ text & BERT & MiniLM & CLIP-T & SigLIP-T \\
 \midrule
-DINOv2-SALAD-15k & 0.483 & 0.763 & --- & ($+$0.280 @ 15) \\
-DINOv2-MLP-30k   & 0.169 & 0.712 & 0.763 & $+$0.594 \\
-DINOv2-SALAD-30k & 0.212 & 0.686 & 0.737 & $+$0.525 \\
-DINOv2-SALAD-50k & 0.110 & 0.661 & 0.737 & $+$0.627 \\
-CLIP-SALAD-30k   & 0.551 & 0.686 & 0.720 & $+$0.169 \\
-CLIP-MLP-30k$^\dagger$ & 0.932 & 0.932 & 0.932 & 0.000 \\
-\bottomrule
-\multicolumn{5}{l}{\footnotesize $^\dagger$ collapsed; tied
-similarity values, R@1 not informative.}
-\end{tabular}
-\end{table}
-
-The expected H-OCR test was: ``does CLIP's R@1 drop when the title
-is blanked?'' We will execute this on CLIP zero-shot in
-\S\ref{sec:disc} once the descriptor cache supports the blanked
-encoding pass for non-trained encoders. The unexpected finding
-from the trained checkpoints is the reverse, and it is universal
-across our four 30\,k fine-tunes plus the 50\,k saturation run:
-blanking the title-bearing top region of every image
-\emph{improves} Phase-2 anchor-pool R@1, with the size of the
-improvement scaling with training-data size on DINOv2 and being
-substantially smaller on CLIP. The saturation 50\,k DINOv2-SALAD
-checkpoint achieves Protocol-A R@10$\,=\,$0.915 but Phase-2
-R@1$\,=\,$0.110; blanking 30\,\% of every image lifts the latter
-to $0.737$ --- a 6.7$\times$ improvement from a literal
-information-removal step. The CLIP-SALAD-30k row tells the
-mechanism story most cleanly: starting at Phase-2 R@1$\,=\,$0.551
-(close to CLIP zero-shot's 0.932), 30\,\% blanking lifts it to
-$0.720$. Even on a backbone that arrived already well-aligned
-with text, fine-tuning on Wikipedia introduces a layout-region
-confound the trained model overweights at test time.
-
-This is the strongest possible signal that fine-tuning on a
-single visual corpus \emph{anti-learns} features that matter for
-the underlying retrieval task: layout-fingerprint pixels become a
-confound the model treats as the discriminative signal, even
-though for cross-set transfer they are noise. This finding was
-not anticipated; the original H-OCR test asked whether CLIP
-\emph{relies} on title text in the natural pretrained state. The
-trained-model pattern documents a complementary pathology: heavy
-fine-tuning teaches the model to \emph{exclusively} rely on the
-page-chrome region that includes the title, to the point that
-erasing it improves transfer. A clean test of H-OCR for CLIP
-zero-shot, plus a regularisation strategy that suppresses the
-title-region overweighting during fine-tuning, are concrete future
-work items in \S\ref{sec:disc}.
-
-\subsection{Platonic alignment grid}
-\label{sec:exp_platonic}
-
-\begin{table}[t]
-\caption{Mutual $k$-NN at $k=10$ between every (image, text)
-encoder pair on $N=2000$ Wikipedia pages.  Higher = closer
-representational alignment.  Bold = highest entry per row.}
-\label{tab:platonic_grid}
-\centering
-\small
-\begin{tabular}{lcccc}
-\toprule
-image $\backslash$ text & BERT & MiniLM & CLIP-text & SigLIP-text \\
-\midrule
-CLIP            & 0.094 & 0.120 & \textbf{0.138} & 0.132 \\
-SigLIP          & 0.091 & 0.108 & 0.123 & \textbf{0.131} \\
-DINOv2          & \textbf{0.027} & 0.021 & 0.019 & 0.026 \\
-ImageNet ViT    & 0.018 & 0.013 & 0.013 & \textbf{0.019} \\
-I-JEPA          & \textbf{0.019} & 0.014 & 0.016 & 0.018 \\
-Plain ViT (rand)& 0.008 & 0.007 & 0.007 & \textbf{0.009} \\
+\rowcolor{cITC} CLIP             & 0.094 & 0.120 & \textbf{0.138} & 0.132 \\
+\rowcolor{cITC} SigLIP           & 0.091 & 0.108 & 0.123 & \textbf{0.131} \\
+\rowcolor{cSSL} DINOv2           & \textbf{0.027} & 0.021 & 0.019 & 0.026 \\
+\rowcolor{cSSL} I-JEPA           & \textbf{0.019} & 0.014 & 0.016 & 0.018 \\
+\rowcolor{cSUP} ImageNet ViT     & 0.018 & 0.013 & 0.013 & \textbf{0.019} \\
+\rowcolor{cRND} Plain ViT (rand) & 0.008 & 0.007 & 0.007 & \textbf{0.009} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -707,213 +422,136 @@ Plain ViT (rand)& 0.008 & 0.007 & 0.007 & \textbf{0.009} \\
 \begin{figure}[t]
 \centering
 \includegraphics[width=0.95\columnwidth]{figures/platonic_vs_retrieval.pdf}
-\caption{Central paper figure. Each point is one image encoder; the
-$x$-axis is its highest mutual-$k$NN@10 alignment with any of four
-text encoders (column max from Table~\ref{tab:platonic_grid});
-the $y$-axis is its Protocol-A R@10 zero-shot
-(Table~\ref{tab:retrieval_zeroshot}). The two image-text contrastive
-encoders (CLIP, SigLIP) sit far from the four image-only encoders.
-Spearman $\rho = 0.83$ ($p = 0.04$, $n = 6$) supports the Platonic
-prediction that alignment with a text encoder predicts cross-modal
-retrieval performance.}
-\label{fig:platonic_scatter}
+\caption{Each point is one image encoder. The $x$-axis is its
+maximum mutual-$k$NN@10 against the four text encoders (column max
+of Table~\ref{tab:platonic}); the $y$-axis is its zero-shot
+Protocol-A R@10 (Table~\ref{tab:zeroshot}). Marker shape and pastel
+colour code the pretraining family. Spearman $\rho = 0.83$
+($p = 0.04$, $n = 6$).}
+\label{fig:scatter}
 \end{figure}
 
-\paragraph{Alignment $\to$ retrieval correlation
-(Figure~\ref{fig:platonic_scatter}).} The Platonic Representation
-Hypothesis predicts that alignment with a strong text encoder
-rank-correlates with Protocol-A R@10. We measure Spearman $\rho$
-between each image encoder's column-max in
-Table~\ref{tab:platonic_grid} and its Protocol-A R@10 in
-Table~\ref{tab:retrieval_zeroshot}: $\rho = 0.83$ ($p = 0.04$,
-$n = 6$). Statistically significant at the $5\,\%$ level even at
-$n = 6$ encoders. The two image-text contrastive encoders (CLIP,
-SigLIP) cluster in the upper-right corner; DINOv2, ImageNet ViT,
-I-JEPA, and the random-init plain ViT cluster in the lower-left.
-\textbf{This is the central empirical claim of the paper:} the
-\emph{kind} of pretraining matters far more than the architecture
-or the specific contrastive form, and the directionality of effect
-on document retrieval is exactly what the Platonic prediction
-expects --- distance to text-encoder geometry predicts ability to
-retrieve text-heavy visual documents.
+Table~\ref{tab:platonic} reports image-encoder $\times$
+text-encoder mutual-$k$NN@10 alignment. CLIP and SigLIP align with
+text encoders at 0.09--0.14; the four image-only encoders align at
+0.007--0.027. Figure~\ref{fig:scatter} plots, for each image
+encoder, its column-maximum text alignment against its zero-shot
+Protocol-A R@10. The Spearman correlation is $0.83$ ($p=0.04$,
+$n=6$): statistically significant even at this small sample size.
+The two image--text contrastive encoders sit in the upper-right
+corner; the four image-only encoders sit in the lower-left.
 
-\subsection{Causal probing with LEACE}
-\label{sec:exp_leace}
+This is the central empirical claim of the paper. The kind of
+pretraining the encoder received is a strong predictor of its
+retrieval performance, mediated by its alignment with text
+representations on the same content. The Platonic Hypothesis is
+supported in this domain: encoders close to the text-encoder
+geometry retrieve text-heavy visual documents better.
 
-We fit LEACE on cached descriptors of each encoder, with two
-protected directions in turn: (i)~the title-region direction
-estimated from the title-blanked variant (one-dimensional);
-(ii)~the layout-class one-hot (5-dimensional column space).
-After erasure, we re-run Protocol-A on the erased descriptors
-and re-measure Platonic alignment with the four text encoders.
-A direction is \emph{causally used} when its erasure drops
-both R@10 and alignment substantially; merely \emph{encoded}
-when only the linear probe for that direction loses
-classification accuracy but R@10 and alignment are preserved.
-\TODO{LEACE results table; expected pattern: title-region
-erasure tanks CLIP retrieval more than DINOv2 retrieval if
-H-OCR, drops both retrieval and alignment together if
-H-Platonic.}
-
-\subsection{Saturation: how much data does fine-tuning need?}
-\label{sec:exp_saturation}
+\subsection{Universal overspecialisation}
 
 \begin{table}[t]
-\caption{Data-scale data points for DINOv2-SALAD on Protocol A
-(leak-free crop$\to$page retrieval, $P=2000$ pages eval).
-50\,k$\times$3\,ep is our largest fine-tune; the cluster's 7\,h
-walltime cap allowed $\sim$8\,400 of the planned 9\,375 optimiser
-steps before checkpoint, which the recall numbers reflect.}
-\label{tab:saturation}
+\caption{Phase-2 R@1 with the top fraction of every anchor and
+pool image painted white. Every fine-tuned model improves under
+blanking, indicating the model overweights the title-bearing top
+region during fine-tuning. CLIP+MLP-30k figures are not informative
+because the model collapsed.}
+\label{tab:blank}
 \centering
 \small
-\begin{tabular}{lcc}
+\begin{tabular}{lccc}
 \toprule
-Train pages $\times$ epochs & Protocol-A R@1 & Protocol-A R@10 \\
+Run & orig.\ R@1 & b-15 R@1 & b-30 R@1 \\
 \midrule
-15\,000 $\times$ 3 (prior) & 0.457 & 0.840 \\
-50\,000 $\times$ 3 (sat.)  & \textbf{0.569} & \textbf{0.915} \\
+\rowcolor{cFT} DINOv2-MLP-30k     & 0.169 & 0.712 & 0.763 \\
+\rowcolor{cFT} DINOv2-SALAD-30k   & 0.212 & 0.686 & 0.737 \\
+\rowcolor{cFT} DINOv2-SALAD-50k   & 0.110 & 0.661 & 0.737 \\
+\rowcolor{cFT} CLIP-SALAD-30k    & 0.551 & 0.686 & 0.720 \\
+\rowcolor{cFT} CLIP-MLP-30k$^\dagger$ & 0.932 & 0.932 & 0.932 \\
 \bottomrule
+\multicolumn{4}{l}{\footnotesize $^\dagger$~Collapsed model;
+embeddings are nearly identical.}
 \end{tabular}
 \end{table}
 
-There is no published baseline for visual-document retrieval on
-\texttt{wiki-ss-corpus} that fixes a ``standard'' training-set
-size. We therefore train DINOv2-SALAD on 50\,k pages $\times$ 3
-epochs with frequent in-loop eval and the larger fine-tune
-saturates at Protocol-A R@10$\,=\,$0.915 (Table~\ref{tab:saturation}),
-$+0.075$ over the 15\,k baseline. In-distribution skill thus
-continues to climb monotonically with training data, but in the
-opposite direction Phase-2 transfer degrades sharply
-(Table~\ref{tab:titleblanked}): R@1 drops from 0.483 (15\,k) to
-0.110 (50\,k), with the same model. The two metrics measure
-different things: Protocol-A scores layout-template recognition on
-in-distribution pages; Phase-2 scores cross-set anchor-pool
-transfer. The data-scale curve confirms F2 of the historical write-up
-quantitatively at the new scale: \emph{larger trained DINOv2-SALAD
-checkpoints overspecialise to Wikipedia layout fingerprints.}
+The original H-OCR test asks: ``does CLIP's R@1 drop when the
+title is blanked?'' What we observe in Table~\ref{tab:blank} on the
+trained checkpoints is the opposite. Every fine-tuned DINOv2 model
+sees Phase-2 R@1 \emph{rise sharply} under blanking. The 50\,k
+saturation checkpoint goes from R@1 $=$~0.110 (worse than DINOv2
+zero-shot's 0.593) to 0.737 when the top 30\,\% of every test
+image is painted white --- a $6.7\times$ improvement from
+information removal. CLIP+SALAD shows the same trend in milder
+form (0.551 $\to$ 0.720).
 
-\subsection{JEPA + adapter: closing the multimodal gap (Q2)}
-\label{sec:exp_jepa_adapter}
+The mechanism is straightforward: fine-tuning on a single visual
+corpus (Wikipedia screenshots) teaches the encoder that the
+title-bearing top region perfectly identifies a page within the
+training distribution, so it learns to overweight that region. On
+in-distribution Protocol-A this is helpful (R@10 climbs with
+training data). On the cross-set anchor pool, where positives and
+hard negatives are crops sampled from arbitrary regions of unrelated
+pages, the same overweighting becomes a confound. Removing those
+pixels removes the confound and the underlying retrievable
+features re-emerge. We did not anticipate this finding; it argues
+for an explicit regularisation (e.g.\ random title-region masking
+during training) as a future-work item.
 
-\TODO{This subsection will be written once the adapter
-experiment is run (deferred from the 72\,h scope into the
-post-demo extension list; see Discussion).}
-We train a frozen-I-JEPA + linear-adapter to produce features
-in the BERT-base embedding space, contrastively on
-(\texttt{page-screenshot}, \texttt{page-title}) pairs from
-wiki-ss. We then evaluate Protocol-A and Mode~II
-(image$\to$text retrieval). The headline question is whether
-adapted I-JEPA matches zero-shot CLIP retrieval performance
-\emph{and} cleanly avoids the OCR-shortcut behaviour CLIP
-exhibits on the title-blanked test
-(Section~\ref{sec:exp_titleblanked}).
-
-\subsection{Interpretability snapshots}
-\label{sec:exp_interpret}
-
-For DINOv2-SALAD trained on 15\,k pages (a checkpoint we have
-on hand), we report:
-
-\begin{itemize}
-  \item Last-block CLS-attention overlays. \TODO{Sample image
-        path: \texttt{runs/.../interpret/attention\_sample0.png}.}
-        Attention concentrates on header chrome and margins, not
-        body text — consistent with the resolution argument
-        of \S\ref{sec:task}.
-  \item Per-patch SALAD dustbin overlay: \TODO{$\sim 82\,\%$} of
-        patches are routed to the dustbin, consistent with the
-        model treating most patches as uninformative and relying
-        on a small set of structural-fingerprint patches for the
-        descriptor.
-  \item CLS-vs-VLAD descriptor decomposition: same-page similarity
-        $\approx \TODO{0.64}$ decomposes as
-        \TODO{$0.62$~(VLAD)~$+~0.02$~(CLS)}, indicating the
-        256-d CLS branch contributes only $\sim$3\,\% of the
-        discriminative signal.
-\end{itemize}
-
-These artefacts are evidence for the layout-fingerprint
-explanation of trained-model performance, complementing the
-LEACE result of \S\ref{sec:exp_leace}.
-
-\section{Discussion}
+\section{Discussion and Limitations}
 \label{sec:disc}
 
-\subsection{What our results would and would not show}
+\textbf{Single seed.} All training runs use one random seed. The
+qualitative ordering across encoder families is large enough to
+read past seed noise (the closest comparison, DINOv2-MLP-30k vs.\
+DINOv2-SALAD-30k at $\Delta$R@10 $=0.093$, is well outside typical
+single-seed jitter), but the within-family numbers (CLIP-SALAD vs.\
+CLIP-MLP at the same LR) require multi-seed reruns before strong
+claims.
 
-If Tables~\ref{tab:retrieval_zeroshot}--\ref{tab:platonic_grid} hold
-the predicted ordering, the central claim is:
-\emph{multimodal contrastive pretraining (CLIP, SigLIP) gives a
-quantifiable retrieval advantage on visual documents that is
-explained by Platonic alignment with text encoders, and most of
-that advantage can be recovered by a JEPA-pretrained image-only
-encoder plus a small post-hoc text adapter.} The remaining
-advantage (whatever fraction of CLIP's lead does not transfer to
-adapted I-JEPA) we conjecture is exactly the OCR-shortcut margin
-that title-blanked Phase-2 would isolate. Confirming both numerical
-predictions would tell a coherent story; falsifying any single
-piece would force a clear revision.
+\textbf{Pool size.} The headline retrieval pool ($P=2000$) is small
+relative to industrial document corpora ($10^5$--$10^6$). The
+Phase-2 pool ($\sim$7 candidates per anchor) is smaller still. Our
+numbers should not be directly compared with ColPali-on-ViDoRe
+\cite{faysse2025colpali}; the meaningful comparisons are
+within-table between encoders evaluated on identical protocols.
 
-\subsection{Limitations}
+\textbf{Crop resolution.} At $224\times 224$\,px input, body text is
+sub-pixel. Anything called ``reading'' in this paper refers to
+heading-level text and layout structure, not fluent body content.
+A higher-resolution variant would change which signals are
+available and is a natural follow-up.
 
-(1)~All evaluations are single-seed; multi-seed CIs are deferred
-(Section~\ref{sec:future}). Cross-encoder differences within
-$\sim 0.02$ R@10 should be read as ``within typical seed noise.''
-(2)~Eval pool $P=2000$ is small relative to industrial document
-corpora; recall numbers will not directly compare to
-ColPali-on-ViDoRe~\cite{faysse2025colpali} or document-AI
-benchmarks at the $10^5$--$10^6$ scale.
-(3)~Crop resolution prevents body-text recovery; ``reading'' in
-this paper refers to heading-level text and layout structure.
-(4)~Phase-2 effective sample size is $\sim 118$ anchors, not 571,
-because the upstream HF anchors repository ships only the
-alphabetically-first $\sim 10\,$k anchor images; we report Wilson
-intervals on R@1 to surface this.
-(5)~I-JEPA's only publicly released weights are ViT-H/14, breaking
-the ViT-B fair-comparison policy; we therefore include I-JEPA in
-the Platonic alignment grid but exclude it from architecturally
-matched retrieval comparisons.
-(6)~Perceptual-hash dedup of wiki-ss screenshots produces clusters
-dominated by Wikipedia template structure rather than content
-near-duplicates. Content-based (text-similarity) dedup is the
-right approach and is deferred.
+\textbf{Direct H-OCR test.} The natural test of H-OCR for CLIP
+zero-shot --- re-encode the eval slice with the title region
+blanked, re-run Protocol-A --- requires a second descriptor cache
+pass and is not in the present version. The trained-model
+overspecialisation finding (Table~\ref{tab:blank}) is a partial
+substitute but does not directly answer the H-OCR question for
+zero-shot CLIP.
 
-\subsection{Future work}
-\label{sec:future}
+\textbf{I-JEPA + adapter.} Q2's most informative test is whether a
+small linear adapter trained on (page-screenshot, page-title) pairs
+can rescue I-JEPA to CLIP-level retrieval performance. We did not
+run this experiment; it remains the cleanest way to test whether
+text supervision is genuinely necessary or merely a shortcut.
 
-The §7 program of the project plan continues from this paper:
-multi-seed reruns of the headline grid (CIs);
-ColPali-style late-interaction baseline (skip aggregation);
-sparse-autoencoder analysis of each encoder following
-Stevens et al.~\cite{stevens2025saev} for direct feature inventory;
-cross-corpus generalisation evaluation (ViDoRe, DocVQA) to
-strengthen the ``not just wiki-template-fitting'' claim;
-larger-scale tier (CLIP-L, SigLIP-L, I-JEPA-H all frozen) on the
-Platonic grid to test the Huh et al.~\cite{huh2024platonic}
-``scale $\to$ alignment'' prediction; and a JEPA + cross-modal
-adapter that uses the SALAD aggregator's per-cluster representation
-to localise alignment to image regions, not just the global
-descriptor.
-
-\section{Conclusions}
+\section{Conclusion}
 \label{sec:conclusions}
 
-We treated visual document retrieval on Wikipedia screenshots as a
-controlled testbed for three positioning questions about visual
-encoders: when does visual reading beat tokenwise reading, can
-JEPA-style predictive pretraining attain CLIP-level multimodal
-alignment without text supervision, and does the Platonic
-Representation Hypothesis explain the cross-encoder ordering. We
-introduced a leak-free crop$\to$page protocol and a fair
-ViT-B-scale encoder grid to make these questions answerable, and a
-LEACE-based causal-probing pipeline to disambiguate encoded from
-causally-used features. \TODO{Headline numerical claims will be
-plugged in once the queued runs complete (ETA 24--40\,h).}
-
-% Acknowledgements (optional). Anonymise for blind review if needed.
-% \section*{Acknowledgements}
-% Compute provided by the Ko\c{c} University Valar cluster.
+We compared six image encoders trained with five distinct
+pretraining objectives on a leak-free crop$\rightarrow$page
+retrieval task over Wikipedia screenshots. Image--text contrastive
+pretraining (CLIP, SigLIP) dominates zero-shot retrieval over
+image-only self-supervision (DINOv2, I-JEPA), supervised
+classification (ImageNet ViT), and random initialisation. Across
+the six encoders, alignment with text encoders rank-correlates
+with retrieval performance at Spearman $\rho = 0.83$, supporting
+the Platonic Representation Hypothesis on this domain.
+Fine-tuning DINOv2 with the SALAD aggregator on 50\,k pages
+reaches R@10 $=$~0.915, exceeding zero-shot CLIP, but introduces a
+universal pathology: the fine-tuned model overweights the title
+region of every page, to the point that erasing those pixels at
+test time improves cross-set transfer by up to $6.7\times$.
 
 \bibliography{visword_report}
 \bibliographystyle{comp547}

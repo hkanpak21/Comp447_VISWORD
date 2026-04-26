@@ -33,13 +33,18 @@ OUT_DIR = ROOT / "paper/report_template/figures"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Encoder display labels + JSON file basenames.
+# Pastel colours coded by pretraining family (consistent with paper tables):
+#   image-text contrastive  -> light blue
+#   image-only SSL          -> light green
+#   supervised classification-> light salmon
+#   random init             -> light grey
 encoders = {
-    "clip_image":   {"label": "CLIP",          "color": "#1f77b4"},
-    "siglip_image": {"label": "SigLIP",        "color": "#ff7f0e"},
-    "dinov2":       {"label": "DINOv2",        "color": "#2ca02c", "zs_alias": "dinov2_cls"},
-    "imagenet_vit": {"label": "ImageNet ViT",  "color": "#d62728"},
-    "ijepa":        {"label": "I-JEPA",        "color": "#9467bd"},
-    "plain_vit":    {"label": "Plain ViT (random)", "color": "#7f7f7f"},
+    "clip_image":   {"label": "CLIP",          "color": "#7BAFD4", "marker": "o"},
+    "siglip_image": {"label": "SigLIP",        "color": "#3F7AB1", "marker": "o"},
+    "dinov2":       {"label": "DINOv2",        "color": "#9EC795", "marker": "s", "zs_alias": "dinov2_cls"},
+    "ijepa":        {"label": "I-JEPA",        "color": "#5C9C52", "marker": "s"},
+    "imagenet_vit": {"label": "ImageNet ViT",  "color": "#E8A29A", "marker": "^"},
+    "plain_vit":    {"label": "Plain ViT (random)", "color": "#B0B0B0", "marker": "D"},
 }
 text_encoders = ["bert", "minilm", "clip_text", "siglip_text"]
 
@@ -80,25 +85,37 @@ def main() -> None:
     rho, p = spearmanr(xs, ys)
     print(f"\nSpearman rho = {rho:.3f} (p = {p:.4f}) over n = {len(xs)} encoders")
 
-    fig, ax = plt.subplots(figsize=(5.0, 3.8))
-    ax.scatter(xs, ys, c=colors, s=110, edgecolors="black", linewidths=0.7, zorder=3)
-    for x, y, l in zip(xs, ys, labels):
-        # tweak text positions to avoid overlaps
-        dx, dy = 0.005, 0.012
-        if l == "DINOv2":
-            dx, dy = 0.005, -0.04
-        elif l == "Plain ViT (random)":
-            dx, dy = -0.005, -0.04
-        elif l == "I-JEPA":
-            dx, dy = 0.005, 0.025
-        ax.annotate(l, (x, y), xytext=(x + dx, y + dy), fontsize=9)
+    markers = [encoders[k]["marker"] for k in encoders if (ZS_DIR / f"{encoders[k].get('zs_alias', k)}_protocolA_n2000.json").exists()]
 
-    ax.set_xlabel("Max mutual-$k$NN@10 over text encoders\n(image enc.\\ vs.\\ \\{BERT, MiniLM, CLIP-text, SigLIP-text\\})")
-    ax.set_ylabel("Protocol-A R@10 zero-shot ($P{=}2000$)")
-    ax.set_title(f"Platonic alignment predicts retrieval ($\\rho = {rho:.2f}$)")
-    ax.grid(alpha=0.3)
-    ax.set_xlim(-0.005, max(xs) * 1.2)
-    ax.set_ylim(-0.05, 1.0)
+    fig, ax = plt.subplots(figsize=(4.6, 3.4))
+    for x, y, c, m, l in zip(xs, ys, colors, markers, labels):
+        ax.scatter(x, y, c=c, s=130, edgecolors="#333333", linewidths=0.6,
+                   marker=m, zorder=3, label=l)
+
+    # Inline labels with manual position tweaks for readability
+    label_offsets = {
+        "CLIP":             (0.006, 0.020, "left"),
+        "SigLIP":           (0.006, 0.020, "left"),
+        "DINOv2":           (0.0, 0.060, "center"),
+        "ImageNet ViT":     (0.012, 0.005, "left"),
+        "I-JEPA":           (0.0, -0.080, "center"),
+        "Plain ViT (random)": (-0.002, 0.060, "right"),
+    }
+    for x, y, l in zip(xs, ys, labels):
+        dx, dy, ha = label_offsets.get(l, (0.006, 0.018, "left"))
+        ax.annotate(l, (x, y), xytext=(x + dx, y + dy),
+                    fontsize=8.5, ha=ha)
+
+    ax.set_xlabel("Max mutual-kNN@10 vs. a text encoder", fontsize=10)
+    ax.set_ylabel("Protocol-A R@10 (zero-shot, P=2000)", fontsize=10)
+    ax.set_title("Spearman $\\rho = %.2f$ ($p = %.2f$, $n = %d$)"
+                 % (rho, p, len(xs)), fontsize=10)
+    ax.grid(alpha=0.25, linestyle=":")
+    ax.set_axisbelow(True)
+    ax.set_xlim(-0.012, max(xs) * 1.30)
+    ax.set_ylim(-0.10, 1.05)
+    for spine in ("top", "right"):
+        ax.spines[spine].set_visible(False)
 
     fig.tight_layout()
     pdf = OUT_DIR / "platonic_vs_retrieval.pdf"
