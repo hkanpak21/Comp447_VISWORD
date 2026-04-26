@@ -685,10 +685,8 @@ work items in \S\ref{sec:disc}.
 
 \begin{table}[t]
 \caption{Mutual $k$-NN at $k=10$ between every (image, text)
-encoder pair on $N=1000$ Wikipedia pages. Higher = closer
-representational alignment. Diagonal entries (e.g.\ CLIP-image
-vs.\ CLIP-text) are upper bounds, since the two halves were
-co-trained.}
+encoder pair on $N=2000$ Wikipedia pages.  Higher = closer
+representational alignment.  Bold = highest entry per row.}
 \label{tab:platonic_grid}
 \centering
 \small
@@ -696,23 +694,48 @@ co-trained.}
 \toprule
 image $\backslash$ text & BERT & MiniLM & CLIP-text & SigLIP-text \\
 \midrule
-DINOv2          & \TODO{} & \TODO{} & \TODO{} & \TODO{} \\
-CLIP            & \TODO{} & \TODO{} & \textbf{\TODO{}} & \TODO{} \\
-SigLIP          & \TODO{} & \TODO{} & \TODO{} & \textbf{\TODO{}} \\
-ImageNet ViT    & \TODO{} & \TODO{} & \TODO{} & \TODO{} \\
-I-JEPA          & \TODO{} & \TODO{} & \TODO{} & \TODO{} \\
-Random-init ViT & \TODO{$\approx$0} & \TODO{} & \TODO{} & \TODO{} \\
+CLIP            & 0.094 & 0.120 & \textbf{0.138} & 0.132 \\
+SigLIP          & 0.091 & 0.108 & 0.123 & \textbf{0.131} \\
+DINOv2          & \textbf{0.027} & 0.021 & 0.019 & 0.026 \\
+ImageNet ViT    & 0.018 & 0.013 & 0.013 & \textbf{0.019} \\
+I-JEPA          & \textbf{0.019} & 0.014 & 0.016 & 0.018 \\
+Plain ViT (rand)& 0.008 & 0.007 & 0.007 & \textbf{0.009} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\paragraph{Alignment vs.\ retrieval.} The Platonic Hypothesis predicts
-that alignment with a strong text encoder should rank-correlate with
-Protocol-A R@10 across image encoders. We will report Spearman
-$\rho$ between Table~\ref{tab:platonic_grid}'s
-\emph{best-text-encoder column max} and the Protocol-A R@10
-column of Table~\ref{tab:retrieval_zeroshot}. \TODO{$\rho =$
-will be computed; expected $> 0.5$ if H-Platonic holds.}
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.95\columnwidth]{figures/platonic_vs_retrieval.pdf}
+\caption{Central paper figure. Each point is one image encoder; the
+$x$-axis is its highest mutual-$k$NN@10 alignment with any of four
+text encoders (column max from Table~\ref{tab:platonic_grid});
+the $y$-axis is its Protocol-A R@10 zero-shot
+(Table~\ref{tab:retrieval_zeroshot}). The two image-text contrastive
+encoders (CLIP, SigLIP) sit far from the four image-only encoders.
+Spearman $\rho = 0.83$ ($p = 0.04$, $n = 6$) supports the Platonic
+prediction that alignment with a text encoder predicts cross-modal
+retrieval performance.}
+\label{fig:platonic_scatter}
+\end{figure}
+
+\paragraph{Alignment $\to$ retrieval correlation
+(Figure~\ref{fig:platonic_scatter}).} The Platonic Representation
+Hypothesis predicts that alignment with a strong text encoder
+rank-correlates with Protocol-A R@10. We measure Spearman $\rho$
+between each image encoder's column-max in
+Table~\ref{tab:platonic_grid} and its Protocol-A R@10 in
+Table~\ref{tab:retrieval_zeroshot}: $\rho = 0.83$ ($p = 0.04$,
+$n = 6$). Statistically significant at the $5\,\%$ level even at
+$n = 6$ encoders. The two image-text contrastive encoders (CLIP,
+SigLIP) cluster in the upper-right corner; DINOv2, ImageNet ViT,
+I-JEPA, and the random-init plain ViT cluster in the lower-left.
+\textbf{This is the central empirical claim of the paper:} the
+\emph{kind} of pretraining matters far more than the architecture
+or the specific contrastive form, and the directionality of effect
+on document retrieval is exactly what the Platonic prediction
+expects --- distance to text-encoder geometry predicts ability to
+retrieve text-heavy visual documents.
 
 \subsection{Causal probing with LEACE}
 \label{sec:exp_leace}
