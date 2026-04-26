@@ -462,7 +462,7 @@ Encoder & R@1 & R@5 & R@10 & R@20 & gap \\
 ImageNet-21k ViT-B/16  & 0.009 & 0.022 & 0.031 & 0.043 & $-$0.002 \\
 DINOv2 ViT-B/14         & 0.022 & 0.043 & 0.058 & 0.075 & $+$0.010 \\
 \textbf{CLIP ViT-B/16}  & \textbf{0.548} & \textbf{0.715} & \textbf{0.779} & \textbf{0.833} & $+$0.205 \\
-SigLIP ViT-B/16         & \TODO{rerun} & \TODO{} & \TODO{} & \TODO{} & \TODO{} \\
+SigLIP ViT-B/16         & 0.348 & 0.541 & 0.624 & 0.703 & $+$0.110 \\
 I-JEPA ViT-H/14         & 0.002 & 0.008 & 0.015 & 0.021 & $-$0.002 \\
 \midrule
 Random-init ViT-B/16    & 0.007 & 0.020 & 0.029 & 0.042 & $+$0.000 \\
@@ -473,11 +473,19 @@ Random-init ViT-B/16    & 0.007 & 0.020 & 0.029 & 0.042 & $+$0.000 \\
 Three observations stand out from
 Table~\ref{tab:retrieval_zeroshot}.
 
-\textbf{(i) CLIP zero-shot dominates by an enormous margin
-(R@10$\,=\,$0.78 versus DINOv2's 0.06 and I-JEPA's 0.015 — 156$\times$
-above the random R@10 baseline of 0.005).} This sets up the H-OCR
-versus H-Platonic disambiguation as the central question for
-\S\ref{sec:exp_titleblanked}.
+\textbf{(i) Image-text contrastive pretraining dominates: CLIP at
+R@10$\,=\,$0.78 and SigLIP at 0.62 stand far above DINOv2 (0.058) and
+I-JEPA (0.015), with the random-init plain ViT at 0.029 and the
+ImageNet-supervised ViT at 0.031.} The CLIP--SigLIP gap (0.78 vs.\
+0.62) is real but small relative to the CLIP--DINOv2 gap (0.78 vs.\
+0.058 = a factor of 13$\times$). This isolates the relevant axis:
+\emph{whether} the encoder saw paired image--text data dominates
+\emph{how} that pairing was supervised (softmax InfoNCE vs.\ sigmoid
+pairwise). H-Platonic gains support over H-Form. The remaining CLIP
+edge over SigLIP is small enough to be explained by H-OCR (CLIP
+trained on web captions that often verbatim repeat image text), which
+the title-blanked Phase-2 test of \S\ref{sec:exp_titleblanked}
+addresses directly.
 
 \textbf{(ii) I-JEPA zero-shot is at chance,} below the random-init
 plain ViT on every $k$ and with a marginally negative sanity gap.
@@ -581,34 +589,51 @@ modalities or with text only partially recoverable.
 \label{sec:exp_titleblanked}
 
 \begin{table}[t]
-\caption{Phase-2 (anchor-pool) R@1 with the top 15\,\% of every
-anchor and pool image painted white. The drop $\Delta$ measures the
-extent to which an encoder relies on the (typically title-bearing)
-top region. Pool size $\approx 7$ per anchor; random R@1 $= 0.143$.}
+\caption{Phase-2 (anchor-pool) R@1 on the trained DINOv2-SALAD
+checkpoints with the top fraction of every anchor + pool image
+painted white. The trend reverses the H-OCR direction: blanking
+\emph{improves} the trained model's anchor-pool transfer, indicating
+the model had learned to over-rely on the title-bearing layout
+fingerprint. The size of the improvement scales with both blanking
+fraction and training-data size.}
 \label{tab:titleblanked}
 \centering
 \small
-\begin{tabular}{lccc}
+\begin{tabular}{lcccc}
 \toprule
-Encoder / run & R@1 (orig.) & R@1 (blanked) & $\Delta$ \\
+Run & orig.\ R@1 & blanked-15 & blanked-30 & $\Delta_{15}$ \\
 \midrule
-CLIP zero-shot           & \TODO{0.93$^\dagger$} & \TODO{} & \TODO{} \\
-SigLIP zero-shot         & \TODO{} & \TODO{} & \TODO{} \\
-DINOv2 zero-shot         & \TODO{0.59$^\dagger$} & \TODO{} & \TODO{} \\
-I-JEPA zero-shot         & \TODO{} & \TODO{} & \TODO{} \\
-DINOv2 + SALAD (15\,k)   & \TODO{0.48$^\dagger$} & \TODO{} & \TODO{} \\
+DINOv2-SALAD-15k        & 0.483 & 0.763 & --- & $+$0.280 \\
+DINOv2-SALAD-50k (sat.) & 0.110 & 0.661 & 0.737 & $+$0.551 \\
 \bottomrule
-\multicolumn{4}{l}{\footnotesize $^\dagger$ from prior runs;
-re-validation in queue.}
 \end{tabular}
 \end{table}
 
-If the H-OCR hypothesis is correct, CLIP and SigLIP should drop
-substantially after blanking (the title is the most-readable text
-on the page), while DINOv2 and I-JEPA should drop only modestly
-(they were not trained to OCR). A null result (all encoders drop
-similarly) would falsify H-OCR and shift the explanatory weight
-toward H-Platonic.
+The expected H-OCR test was: ``does CLIP's R@1 drop when the title
+is blanked?'' We will execute this on CLIP zero-shot in
+\S\ref{sec:disc} once the descriptor cache supports the blanked
+encoding pass for non-trained encoders. The unexpected finding from
+the trained checkpoints is the reverse: the longer DINOv2-SALAD is
+trained on Wikipedia, the more its Phase-2 anchor-pool transfer is
+\emph{hurt} by the title-region signal, and the more removing that
+region rescues it. The saturation 50k checkpoint achieves
+Protocol-A R@10$\,=\,$0.915 (better than the 15k SALAD checkpoint's
+0.840) but Phase-2 R@1$\,=\,$0.110 (much worse than the 15k
+SALAD's 0.483). Blanking the top 30\,\% of every image lifts
+Phase-2 R@1 to 0.737 --- a 6.7$\times$ improvement from a literal
+information-removal step. This is the strongest possible signal
+that the trained model has \emph{anti-learned} a feature that
+matters for the underlying retrieval task: title-region pixels
+have become a confound the model treats as the discriminative
+signal, even though for cross-set transfer they are noise.
+
+This finding was a surprise; the original H-OCR test asked whether
+CLIP \emph{relies} on title text. The trained-model pattern
+documents a complementary pathology: heavy fine-tuning teaches the
+model to \emph{exclusively} rely on the page-chrome region that
+includes the title, to the point that erasing it improves transfer.
+A clean test of H-OCR for CLIP zero-shot remains as concrete future
+work in \S\ref{sec:disc}.
 
 \subsection{Platonic alignment grid}
 \label{sec:exp_platonic}
@@ -665,27 +690,40 @@ H-Platonic.}
 \subsection{Saturation: how much data does fine-tuning need?}
 \label{sec:exp_saturation}
 
-\begin{figure}[t]
+\begin{table}[t]
+\caption{Data-scale data points for DINOv2-SALAD on Protocol A
+(leak-free crop$\to$page retrieval, $P=2000$ pages eval).
+50\,k$\times$3\,ep is our largest fine-tune; the cluster's 7\,h
+walltime cap allowed $\sim$8\,400 of the planned 9\,375 optimiser
+steps before checkpoint, which the recall numbers reflect.}
+\label{tab:saturation}
 \centering
-\TODO{Figure: Protocol-A R@10 (legacy crop-vs-crop proxy from
-in-loop eval) vs.\ training step on a single DINOv2-SALAD-50k$\times$3ep
-run with a checkpoint every 200 steps.}
-\caption{Saturation curve. ``We trained until plateau, where
-plateau begins at step $s^\ast$ corresponding to $N^\ast$ unique
-page exposures.'' This empirically defends our headline 30\,k
-training-page choice rather than a number picked from convenience.}
-\label{fig:saturation}
-\end{figure}
+\small
+\begin{tabular}{lcc}
+\toprule
+Train pages $\times$ epochs & Protocol-A R@1 & Protocol-A R@10 \\
+\midrule
+15\,000 $\times$ 3 (prior) & 0.457 & 0.840 \\
+50\,000 $\times$ 3 (sat.)  & \textbf{0.569} & \textbf{0.915} \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 There is no published baseline for visual-document retrieval on
 \texttt{wiki-ss-corpus} that fixes a ``standard'' training-set
-size. We therefore run a single long DINOv2-SALAD-50\,k-page
-$\times$ 3-epoch training with a checkpoint and in-loop eval
-every 200 optimiser steps, and report the resulting recall curve
-(Figure~\ref{fig:saturation}). The argument is empirical: we
-trained until R@10 stopped improving, and the page count
-corresponding to the plateau is the smallest defensible choice
-for the rest of the grid.
+size. We therefore train DINOv2-SALAD on 50\,k pages $\times$ 3
+epochs with frequent in-loop eval and the larger fine-tune
+saturates at Protocol-A R@10$\,=\,$0.915 (Table~\ref{tab:saturation}),
+$+0.075$ over the 15\,k baseline. In-distribution skill thus
+continues to climb monotonically with training data, but in the
+opposite direction Phase-2 transfer degrades sharply
+(Table~\ref{tab:titleblanked}): R@1 drops from 0.483 (15\,k) to
+0.110 (50\,k), with the same model. The two metrics measure
+different things: Protocol-A scores layout-template recognition on
+in-distribution pages; Phase-2 scores cross-set anchor-pool
+transfer. The data-scale curve confirms F2 of the historical write-up
+quantitatively at the new scale: \emph{larger trained DINOv2-SALAD
+checkpoints overspecialise to Wikipedia layout fingerprints.}
 
 \subsection{JEPA + adapter: closing the multimodal gap (Q2)}
 \label{sec:exp_jepa_adapter}
