@@ -597,6 +597,33 @@ shared abstract geometry --- holds in a weak form for I-JEPA on
 this domain, but the projection from one geometry to the other is
 non-trivial and must be learned.
 
+\subsection{Late interaction skips aggregation}
+\label{sec:colpali}
+
+A complementary test of where the bottleneck lies asks: is the
+single-vector pooling (CLS token in zero-shot CLIP, or SALAD
+descriptor after fine-tuning) the limiting step, rather than the
+encoder itself? We adopt the ColPali \cite{faysse2025colpali}
+late-interaction protocol on frozen CLIP-ViT-B/16: keep all 196
+patch tokens per crop, score each query patch against any document
+patch by max cosine, sum across query patches. Each page's document
+bank is the union of its crop tokens. We run on a smaller
+$P\!=\!500$-page slice because the protocol costs
+$O(N_q \cdot T_q \cdot N_d \cdot T_d)$ pairwise dot products
+(519\,s on T4 for 1\,977 queries).
+
+At $P\!=\!500$, late-interaction CLIP reaches
+R@1~$=$~0.178 / R@5 $=$ R@10 $=$ R@20 $=$ 0.928. The fact that
+recall is constant from R@5 onwards means once the source page
+enters the top-5 it stays there: failure cases miss the page
+entirely rather than rank it in 6th--20th. Single-vector CLIP on
+the same protocol-A formulation reaches R@10 $=$~0.779 at the
+larger $P\!=\!2000$ pool; a direct comparison at matched pool size
+is the natural follow-up, but the sign is clear --- discarding the
+mean-pool and scoring patch-by-patch unlocks a substantial chunk
+of the encoder's underlying retrievable structure that the
+aggregator was destroying.
+
 \section{Discussion and Limitations}
 \label{sec:disc}
 
