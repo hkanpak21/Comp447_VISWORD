@@ -66,9 +66,15 @@ the Platonic Representation Hypothesis as the explanatory axis.
 Fine-tuning DINOv2 with a SALAD aggregator on 50\,k pages reaches
 R@10 $=$~0.915, exceeding zero-shot CLIP, but every fine-tuned
 checkpoint exhibits a layout-fingerprint failure mode: erasing the
-top 30\,\% of every test image \emph{improves} cross-set transfer
-by up to $6.7\times$, indicating the model learns to overweight
-the title region rather than read content.
+top 15--30\,\% of every test image drops in-distribution Protocol-A
+R@10 by up to 0.29 while \emph{improving} cross-set Phase-2 R@1 by
+up to $6.7\times$ on the same checkpoints. Zero-shot CLIP and SigLIP
+move in the opposite direction (R@10 \emph{rises} by 0.07--0.11
+under blanking), falsifying the title-OCR explanation for their
+zero-shot edge. A linear adapter trained on
+(image, BERT-of-title) pairs lifts I-JEPA from R@10~$=$~0.015
+to 0.197, recovering latent text alignment that is invisible without
+the projection.
 \end{abstract}
 
 \begin{figure*}[t]
@@ -448,15 +454,46 @@ representations on the same content. The Platonic Hypothesis is
 supported in this domain: encoders close to the text-encoder
 geometry retrieve text-heavy visual documents better.
 
-\subsection{Universal overspecialisation}
+\subsection{Title-region ablation}
 
 \begin{table}[t]
-\caption{Phase-2 R@1 with the top fraction of every anchor and
-pool image painted white. Every fine-tuned model improves under
-blanking, indicating the model overweights the title-bearing top
-region during fine-tuning. CLIP+MLP-30k figures are not informative
-because the model collapsed.}
-\label{tab:blank}
+\caption{Protocol-A R@10 with the top 15\,\% of every page painted
+white before cropping (b-15) versus the original eval (orig.).
+Top block: zero-shot encoders. Bottom block: fine-tuned checkpoints.
+Sign of $\Delta$ is the central observation: zero-shot CLIP/SigLIP
+\emph{gain} from blanking (negative confound removed); trained
+DINOv2 \emph{loses} substantially (the model learned to depend on
+the title region).}
+\label{tab:blank_protA}
+\centering
+\small
+\begin{tabular}{lccc}
+\toprule
+Encoder & orig.\ R@10 & b-15 R@10 & $\Delta$ \\
+\midrule
+\rowcolor{cITC} CLIP zero-shot         & 0.779 & 0.852 & $+0.073$ \\
+\rowcolor{cITC} SigLIP zero-shot       & 0.624 & 0.731 & $+0.106$ \\
+\rowcolor{cSSL} DINOv2 zero-shot       & 0.058 & 0.058 & $-0.000$ \\
+\rowcolor{cSSL} I-JEPA zero-shot       & 0.015 & 0.012 & $-0.003$ \\
+\rowcolor{cSUP} ImageNet zero-shot     & 0.031 & 0.032 & $+0.001$ \\
+\rowcolor{cRND} Plain-ViT zero-shot    & 0.029 & 0.030 & $+0.001$ \\
+\midrule
+\rowcolor{cFT}  DINOv2-MLP-30k         & 0.787 & 0.494 & $-0.292$ \\
+\rowcolor{cFT}  DINOv2-SALAD-30k       & 0.880 & 0.720 & $-0.161$ \\
+\rowcolor{cFT}  DINOv2-SALAD-50k       & 0.915 & 0.673 & $-0.242$ \\
+\rowcolor{cFT}  CLIP-SALAD-30k         & 0.724 & 0.687 & $-0.037$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[t]
+\caption{Phase-2 cross-set R@1 with the top fraction of every
+anchor and pool image painted white. The same fine-tuned
+checkpoints that lose Protocol-A R@10 under blanking
+(Table~\ref{tab:blank_protA}) \emph{gain} Phase-2 R@1 by the same
+information removal. CLIP+MLP-30k embeddings collapsed; all
+predictions are identical.}
+\label{tab:blank_phase2}
 \centering
 \small
 \begin{tabular}{lccc}
@@ -466,36 +503,99 @@ Run & orig.\ R@1 & b-15 R@1 & b-30 R@1 \\
 \rowcolor{cFT} DINOv2-MLP-30k     & 0.169 & 0.712 & 0.763 \\
 \rowcolor{cFT} DINOv2-SALAD-30k   & 0.212 & 0.686 & 0.737 \\
 \rowcolor{cFT} DINOv2-SALAD-50k   & 0.110 & 0.661 & 0.737 \\
-\rowcolor{cFT} CLIP-SALAD-30k    & 0.551 & 0.686 & 0.720 \\
+\rowcolor{cFT} CLIP-SALAD-30k     & 0.551 & 0.686 & 0.720 \\
 \rowcolor{cFT} CLIP-MLP-30k$^\dagger$ & 0.932 & 0.932 & 0.932 \\
 \bottomrule
-\multicolumn{4}{l}{\footnotesize $^\dagger$~Collapsed model;
-embeddings are nearly identical.}
+\multicolumn{4}{l}{\footnotesize $^\dagger$~Collapsed model.}
 \end{tabular}
 \end{table}
 
-The original H-OCR test asks: ``does CLIP's R@1 drop when the
-title is blanked?'' What we observe in Table~\ref{tab:blank} on the
-trained checkpoints is the opposite. Every fine-tuned DINOv2 model
-sees Phase-2 R@1 \emph{rise sharply} under blanking. The 50\,k
-saturation checkpoint goes from R@1 $=$~0.110 (worse than DINOv2
-zero-shot's 0.593) to 0.737 when the top 30\,\% of every test
-image is painted white --- a $6.7\times$ improvement from
-information removal. CLIP+SALAD shows the same trend in milder
-form (0.551 $\to$ 0.720).
+We test which pixels each model uses by re-encoding the same
+2\,000-page eval slice with the top 15\,\% (and 30\,\%) of every
+page painted white before cropping, then re-running both protocols.
+Tables~\ref{tab:blank_protA} and~\ref{tab:blank_phase2} report the
+deltas, and the three rows of the result tell different stories.
 
-The mechanism is straightforward: fine-tuning on a single visual
-corpus (Wikipedia screenshots) teaches the encoder that the
-title-bearing top region perfectly identifies a page within the
-training distribution, so it learns to overweight that region. On
-in-distribution Protocol-A this is helpful (R@10 climbs with
-training data). On the cross-set anchor pool, where positives and
-hard negatives are crops sampled from arbitrary regions of unrelated
-pages, the same overweighting becomes a confound. Removing those
-pixels removes the confound and the underlying retrievable
-features re-emerge. We did not anticipate this finding; it argues
-for an explicit regularisation (e.g.\ random title-region masking
-during training) as a future-work item.
+\textbf{Zero-shot image--text encoders gain from blanking.} CLIP and
+SigLIP both improve under title removal (R@10 $+0.073$ and $+0.106$
+respectively); the four image-only encoders move by $\le 0.003$.
+This falsifies the simple H-OCR explanation for CLIP's zero-shot
+edge: if CLIP were winning by reading page titles, removing the
+title region would tank its retrieval, but the opposite happens.
+The rise is consistent with the title region acting as a low-information
+template (every Wikipedia page begins with the same chrome), and
+removing it yields cleaner content-driven matches.
+
+\textbf{Trained DINOv2 loses heavily from blanking.} Every
+fine-tuned DINOv2 checkpoint drops between 0.16 and 0.29 R@10
+when the title is removed. The 50\,k saturation checkpoint, the
+strongest in-distribution model in the paper, falls from 0.915 to
+0.673. The same 30\,k MLP run that beats zero-shot CLIP zero-shot
+(0.787 vs.\ 0.779) collapses to 0.494 under blanking. CLIP+SALAD
+moves only $-0.037$, indicating CLIP's fine-tune did not learn the
+shortcut to anywhere near the same degree. Fine-tuning on a single
+visual corpus has taught DINOv2 to bind page identity to the
+title-bearing top region.
+
+\textbf{Phase-2 reverses the sign on the same checkpoints.} The
+title-region features that boost in-distribution Protocol-A are
+the very confound that hurts cross-set Phase-2 transfer
+(Table~\ref{tab:blank_phase2}). Painting the top 30\,\% white
+yields up to $6.7\times$ Phase-2 R@1 improvement on the same
+DINOv2-SALAD-50k that loses 0.242 R@10 in-distribution. Together,
+the two tables locate the failure precisely: it is not that the
+encoder cannot read the body region, it is that the title region
+is so reliably informative on Wikipedia that the model bypasses
+the body. Random title-region masking during training is the
+obvious mitigation.
+
+\subsection{I-JEPA + linear text adapter}
+\label{sec:adapter}
+
+\begin{table}[t]
+\caption{Image-to-text retrieval R@k on a held-out 1\,000-page set
+disjoint from the prior eval slice. Image embeddings are I-JEPA
+target features (1280-d); text embeddings are BERT[CLS] of the
+page title (768-d). The adapter is a single linear map
+$A\in\mathbb{R}^{1280\times 768}$ trained on a 4\,000-page train
+split with InfoNCE ($\tau{=}0.07$, AdamW $\eta{=}10^{-3}$, 3\,k
+steps). Random R@1 $=$~$10^{-3}$.}
+\label{tab:adapter}
+\centering
+\small
+\begin{tabular}{lcccc}
+\toprule
+Configuration & R@1 & R@5 & R@10 & R@20 \\
+\midrule
+\rowcolor{cSSL} I-JEPA $\leftrightarrow$ BERT, no adapter & 0.000 & 0.008 & 0.015 & 0.026 \\
+\rowcolor{cFT}  ~~~~~+ linear adapter $A$ & 0.038 & 0.123 & 0.197 & 0.287 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The zero-shot result (Table~\ref{tab:zeroshot}) leaves Q2 at a sharp
+verdict: I-JEPA does not produce text-retrievable image
+representations out of the box. We test a softer version of Q2:
+do I-JEPA features encode any latent text-aligned structure that a
+small post-hoc adapter could recover? Following the recipe of
+\cite{jose2024dinov2text} but on document screenshots, we train a
+single linear projection $A$ from the I-JEPA target encoder
+(1280-d) into the BERT[CLS] text space (768-d) by InfoNCE on
+4\,000 (page-screenshot, page-title) pairs and evaluate
+image-to-title retrieval on a disjoint 1\,000-page set
+(Table~\ref{tab:adapter}).
+
+The bare cross-encoder retrieval is at chance ($\le 0.026$ at
+R@20). The single linear adapter lifts R@10 from 0.015 to 0.197 ---
+a 13$\times$ improvement from a fixed 1280$\times$768 projection
+that costs no nonlinearity and no extra parameters in the encoder.
+The conclusion qualifies Q2: I-JEPA features are not zero-shot
+text-aligned, but they encode features that BERT can recognise
+after a low-capacity linear correction. The Platonic Hypothesis
+prediction --- that diverse pretraining objectives converge on a
+shared abstract geometry --- holds in a weak form for I-JEPA on
+this domain, but the projection from one geometry to the other is
+non-trivial and must be learned.
 
 \section{Discussion and Limitations}
 \label{sec:disc}
@@ -521,19 +621,14 @@ heading-level text and layout structure, not fluent body content.
 A higher-resolution variant would change which signals are
 available and is a natural follow-up.
 
-\textbf{Direct H-OCR test.} The natural test of H-OCR for CLIP
-zero-shot --- re-encode the eval slice with the title region
-blanked, re-run Protocol-A --- requires a second descriptor cache
-pass and is not in the present version. The trained-model
-overspecialisation finding (Table~\ref{tab:blank}) is a partial
-substitute but does not directly answer the H-OCR question for
-zero-shot CLIP.
-
-\textbf{I-JEPA + adapter.} Q2's most informative test is whether a
-small linear adapter trained on (page-screenshot, page-title) pairs
-can rescue I-JEPA to CLIP-level retrieval performance. We did not
-run this experiment; it remains the cleanest way to test whether
-text supervision is genuinely necessary or merely a shortcut.
+\textbf{Adapter ceiling.} The I-JEPA linear adapter
+(Table~\ref{tab:adapter}) reaches R@10 $=$~0.197 on the
+held-out set. This is well below CLIP zero-shot (0.779 on the
+larger Protocol-A pool with $P=2000$), so ``rescuing I-JEPA to
+CLIP-level retrieval'' would require either a non-linear adapter,
+larger paired-data training, or both. The 0.197 figure is best
+read as evidence of \emph{some} latent alignment, not as a
+practical recipe.
 
 \section{Conclusion}
 \label{sec:conclusions}
@@ -550,8 +645,16 @@ the Platonic Representation Hypothesis on this domain.
 Fine-tuning DINOv2 with the SALAD aggregator on 50\,k pages
 reaches R@10 $=$~0.915, exceeding zero-shot CLIP, but introduces a
 universal pathology: the fine-tuned model overweights the title
-region of every page, to the point that erasing those pixels at
-test time improves cross-set transfer by up to $6.7\times$.
+region, dropping in-distribution Protocol-A R@10 by up to 0.29
+under blanking while \emph{improving} cross-set Phase-2 R@1 by up
+to $6.7\times$. Zero-shot CLIP and SigLIP show the opposite sign
+under the same blanking, falsifying the simple title-OCR
+explanation for their zero-shot edge. A 1280$\times$768 linear
+adapter trained on (image, BERT-title) pairs lifts I-JEPA from
+near-chance to R@10 $=$~0.197, indicating image-only predictive
+features encode latent text-aligned structure that is not
+zero-shot accessible but is recoverable by a low-capacity linear
+projection.
 
 \bibliography{visword_report}
 \bibliographystyle{comp547}
