@@ -40,6 +40,30 @@ from visword.data.light_dataset import default_transform
 
 
 @torch.no_grad()
+def encode_dinov2_patches(crops: list[Image.Image], device: torch.device,
+                          batch_size: int = 8) -> torch.Tensor:
+    """Per-crop patch features for DINOv2-ViT-B/14, (n_crops, 256, 768).
+    Tokens are L2-normed; CLS not included."""
+    import torchvision.transforms as T
+    model = torch.hub.load("facebookresearch/dinov2", "dinov2_vitb14",
+                           verbose=False).to(device).eval()
+    tf = T.Compose([
+        T.Resize(224, interpolation=T.InterpolationMode.BICUBIC),
+        T.CenterCrop(224),
+        T.ToTensor(),
+        T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+    ])
+    out: list[torch.Tensor] = []
+    for i in range(0, len(crops), batch_size):
+        batch = torch.stack([tf(c) for c in crops[i : i + batch_size]]).to(device)
+        feats = model.forward_features(batch)
+        x = feats["x_norm_patchtokens"]                    # (B, 256, 768)
+        x = F.normalize(x, p=2, dim=-1)
+        out.append(x.cpu())
+    return torch.cat(out, dim=0)
+
+
+@torch.no_grad()
 def encode_clip_patches(crops: list[Image.Image], device: torch.device,
                         batch_size: int = 8) -> torch.Tensor:
     """Return per-crop patch token features, (n_crops, T, D)."""
@@ -114,8 +138,10 @@ def main() -> int:
                         "interaction is O(N_doc * Tq * Td) per query")
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--out", type=Path, required=True)
+    p.add_argument("--encoder", choices=["clip", "dinov2"], default="clip")
     p.add_argument("--include-cls", action="store_true",
-                   help="include CLS token; default is patch tokens only")
+                   help="include CLS token; default is patch tokens only "
+                        "(CLIP only; DINOv2 path already excludes it).")
     args = p.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -131,12 +157,14 @@ def main() -> int:
           f"in {time.time() - t0:.1f}s", flush=True)
 
     t0 = time.time()
-    tok = encode_clip_patches(crops, device)               # (N, T, D)
-    print(f"  encoded {tok.shape} in {time.time() - t0:.1f}s", flush=True)
-
-    # Optionally drop CLS token (index 0).
-    if not args.include_cls:
-        tok = tok[:, 1:, :]
+    if args.encoder == "clip":
+        tok = encode_clip_patches(crops, device)           # (N, 197, 768)
+        if not args.include_cls:
+            tok = tok[:, 1:, :]                            # drop CLS
+    else:                                                  # dinov2
+        tok = encode_dinov2_patches(crops, device)         # (N, 256, 768)
+    print(f"  encoded {tok.shape} ({args.encoder}) in {time.time() - t0:.1f}s",
+          flush=True)
     N, T, D = tok.shape
     page_ids_t = torch.from_numpy(page_ids).long()
 
@@ -192,9 +220,9 @@ def main() -> int:
     same = sim_matrix[torch.arange(N), compact]
     diff = (sim_matrix.sum(dim=1) - same) / max(1, P - 1)
     payload = {
-        "encoder": "clip_image",
+        "encoder": args.encoder,
         "method": "late_interaction (ColPali-style, zero-shot)",
-        "include_cls_token": args.include_cls,
+        "include_cls_token": args.include_cls if args.encoder == "clip" else False,
         "num_pages": P,
         "num_crops": N,
         "tokens_per_crop": T,

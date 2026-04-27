@@ -95,6 +95,10 @@ def main() -> int:
                    help="If >0, paint the top fraction of every page "
                         "white BEFORE cropping. The H-OCR ablation.")
     p.add_argument("--out", type=Path, required=True)
+    p.add_argument("--save-descriptors", type=Path, default=None,
+                   help="if set, also dump (emb, page_ids) as .npz so "
+                        "downstream LEACE / descriptor analyses don't "
+                        "need to re-encode.")
     p.add_argument("--batch-size", type=int, default=16)
     args = p.parse_args()
 
@@ -168,6 +172,11 @@ def main() -> int:
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(payload, indent=2))
     print(json.dumps(payload, indent=2))
+
+    if args.save_descriptors is not None:
+        args.save_descriptors.parent.mkdir(parents=True, exist_ok=True)
+        np.savez(args.save_descriptors, emb=emb, page_ids=page_ids)
+        print(f"saved descriptors to {args.save_descriptors}", flush=True)
     return 0
 
 
