@@ -268,6 +268,8 @@ def _load_checkpoint(model: torch.nn.Module, ckpt_path: Path, device: torch.devi
 def run_protocol_a_cli(
     run_dir: Path, *, checkpoint: str = "best_phase1.pt",
     blank_page_top_frac: float = 0.0,
+    min_text_ratio: float = 0.05,
+    save_descriptors: Path | None = None,
 ) -> dict:
     run_dir = run_dir.resolve()
     cfg = _load_cfg(run_dir)
@@ -276,11 +278,19 @@ def run_protocol_a_cli(
         raise SystemExit(f"no checkpoint at {ckpt_path}. Run training first.")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    eval_ds = _rebuild_eval_dataset(cfg, blank_page_top_frac=blank_page_top_frac)
+    eval_ds = _rebuild_eval_dataset(cfg, min_text_ratio=min_text_ratio,
+                                     blank_page_top_frac=blank_page_top_frac)
     model = _build_model_from_cfg(cfg)
     blob = _load_checkpoint(model, ckpt_path, device)
 
-    result = protocol_a_recall(model, eval_ds, k_values=cfg.eval.k_values, device=device)
+    if save_descriptors is not None:
+        embs, page_ids = _encode_all_crops(model, eval_ds, device)
+        save_descriptors.parent.mkdir(parents=True, exist_ok=True)
+        np.savez(save_descriptors, emb=embs.cpu().numpy(),
+                 page_ids=page_ids.cpu().numpy())
+        result = compute_protocol_a_recall(embs, page_ids, cfg.eval.k_values)
+    else:
+        result = protocol_a_recall(model, eval_ds, k_values=cfg.eval.k_values, device=device)
     payload = {
         "protocol": "A_holdout_page_mean",
         "checkpoint": str(ckpt_path),
@@ -310,9 +320,18 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--blank-page-top-frac", type=float, default=0.0,
                    help="If >0, paint the top fraction of every page "
                         "white before cropping (H-OCR ablation).")
+    p.add_argument("--min-text-ratio", type=float, default=0.05,
+                   help="Cropper filter; lower to keep all grid cells "
+                        "(needed for matched orig/blank descriptor pairs "
+                        "in LEACE).")
+    p.add_argument("--save-descriptors", type=Path, default=None,
+                   help="Dump (emb, page_ids) as .npz for downstream "
+                        "LEACE / probe analyses.")
     args = p.parse_args(argv)
     payload = run_protocol_a_cli(args.run_dir, checkpoint=args.checkpoint,
-                                 blank_page_top_frac=args.blank_page_top_frac)
+                                 blank_page_top_frac=args.blank_page_top_frac,
+                                 min_text_ratio=args.min_text_ratio,
+                                 save_descriptors=args.save_descriptors)
     print(json.dumps(payload, indent=2))
     return 0
 

@@ -611,54 +611,66 @@ encoder, not the aggregator.
 \subsection{LEACE causal title-erasure}
 \label{sec:leace}
 
-Pixel-blanking is correlational: it removes title content but also
-whatever else lives in those pixels. We isolate the
-\emph{title-direction} in feature space using LEACE
-\cite{belrose2023leace} with the rank-1 PCA projection of the
-per-crop deltas $\phi(\mathrm{orig})-\phi(\mathrm{blank})$ as the
-protected attribute (higher-rank $Z$ over-erases, since
-$\mathrm{rank}(Z){=}d$ collapses the entire feature space).
-The result on $P{=}2000$ zero-shot:
-CLIP R@10 $0.779 \to 0.823$ (blank) $\to 0.863$ (LEACE);
-DINOv2 R@10 $0.058 \to 0.056 \to 0.068$. LEACE-erasing a single
-axis raises CLIP retrieval more than physical blanking ($+0.084$
-vs $+0.044$): the title-direction's dominant linear axis carries
-enough of CLIP's confounding signal that surgical removal beats
-the pixel intervention. DINOv2 is unmoved by either --- the title
-direction barely exists as a structured axis in its feature space.
+\begin{table}[t]
+\caption{Closed-form LEACE \cite{belrose2023leace} erasure of the
+rank-1 PCA projection of per-crop deltas
+$\phi(\mathrm{orig}){-}\phi(\mathrm{blank})$, $P{=}2000$.
+Higher-rank $Z$ over-erases ($\mathrm{rank}(Z){=}d$ collapses the
+feature space). Last column: explained variance of the rank-1 PCA.}
+\label{tab:leace}
+\centering
+\small
+\begin{tabular}{lcccc}
+\toprule
+Encoder & R@10 orig & R@10 blank & R@10 LEACE & expl.\,var \\
+\midrule
+\rowcolor{cITC} CLIP zero-shot           & 0.779 & 0.823 & \textbf{0.863} & 0.25 \\
+\rowcolor{cITC} SigLIP zero-shot         & 0.611 & 0.716 & \textbf{0.775} & 0.35 \\
+\rowcolor{cSSL} DINOv2 zero-shot         & 0.058 & 0.056 & 0.068          & 0.76 \\
+\rowcolor{cFT}  DINOv2-SALAD-50k trained & 0.911 & 0.670 & 0.912          & 0.20 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Pixel-blanking is correlational. We isolate the
+\emph{title-direction} in feature space and erase it surgically:
+the rank-1 PCA projection of the per-crop deltas serves as a 1-d
+protected attribute for the LEACE eraser. Table~\ref{tab:leace}
+reports the result.
+
+For both image-text contrastive encoders, LEACE-erasing a single
+linear axis raises retrieval \emph{more} than the pixel
+intervention: CLIP $+0.084$ vs $+0.044$, SigLIP $+0.164$ vs $+0.105$.
+The title-direction's dominant axis carries enough of the encoder's
+confounding signal that surgical removal beats the physical one.
+Zero-shot DINOv2 is unmoved by either: the title direction barely
+exists as a structured axis in its feature space.
+
+Trained DINOv2-SALAD-50k splits the analysis. Pixel-blanking drops
+its R@10 from 0.911 to 0.670 ($-0.241$), but rank-1 LEACE leaves
+retrieval untouched (0.912). The trained model's title-region
+dependency is not summarised by a single linear axis. The 8\,448-d
+SALAD descriptor distributes the binding across many directions,
+and a higher-rank LEACE would be required to recover the blanking
+delta. This is consistent with the
+\S\ref{sec:blank} reading: pretraining gives CLIP a clean, low-rank
+title confound; supervised fine-tuning on Wikipedia spreads an
+analogous title-region binding across DINOv2's feature space.
 
 \section{Discussion and Limitations}
 \label{sec:disc}
 
-\textbf{Single seed.} All training runs use one random seed. The
-qualitative ordering across encoder families is large enough to
-read past seed noise (the closest comparison, DINOv2-MLP-30k vs.\
-DINOv2-SALAD-30k at $\Delta$R@10 $=0.093$, is well outside typical
-single-seed jitter), but the within-family numbers (CLIP-SALAD vs.\
-CLIP-MLP at the same LR) require multi-seed reruns before strong
-claims.
-
-\textbf{Pool size.} The headline retrieval pool ($P=2000$) is small
-relative to industrial document corpora ($10^5$--$10^6$). The
-Phase-2 pool ($\sim$7 candidates per anchor) is smaller still. Our
-numbers should not be directly compared with ColPali-on-ViDoRe
-\cite{faysse2025colpali}; the meaningful comparisons are
-within-table between encoders evaluated on identical protocols.
-
-\textbf{Crop resolution.} At $224\times 224$\,px input, body text is
-sub-pixel. Anything called ``reading'' in this paper refers to
-heading-level text and layout structure, not fluent body content.
-A higher-resolution variant would change which signals are
-available and is a natural follow-up.
-
-\textbf{Adapter ceiling.} The I-JEPA linear adapter
-(Table~\ref{tab:adapter}) reaches R@10 $=$~0.197 on the
-held-out set. This is well below CLIP zero-shot (0.779 on the
-larger Protocol-A pool with $P=2000$), so ``rescuing I-JEPA to
-CLIP-level retrieval'' would require either a non-linear adapter,
-larger paired-data training, or both. The 0.197 figure is best
-read as evidence of \emph{some} latent alignment, not as a
-practical recipe.
+All training uses a single random seed. The cross-family
+ordering is large enough to read past seed noise (closest gap
+$\Delta$R@10 $=0.093$, well outside typical jitter), but
+within-family comparisons (CLIP-SALAD vs.\ CLIP-MLP) need
+multi-seed reruns. Pool size $P{=}2000$ is small versus industrial
+$10^5$--$10^6$; numbers are within-table comparable, not cross-paper.
+At $224^2$ input, body text is sub-pixel, so ``reading'' here means
+heading-level text plus layout, not fluent content. The I-JEPA
+adapter R@10 $=$~0.197 is evidence of latent alignment, not a
+practical recipe; matching CLIP-level retrieval would need a
+non-linear adapter and larger paired-data training.
 
 \section{Conclusion}
 \label{sec:conclusions}
