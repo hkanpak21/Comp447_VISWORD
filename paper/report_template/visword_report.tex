@@ -648,14 +648,15 @@ exists as a structured axis in its feature space.
 
 Trained DINOv2-SALAD-50k splits the analysis. Pixel-blanking drops
 its R@10 from 0.911 to 0.670 ($-0.241$), but rank-1 LEACE leaves
-retrieval untouched (0.912). The trained model's title-region
-dependency is not summarised by a single linear axis. The 8\,448-d
-SALAD descriptor distributes the binding across many directions,
-and a higher-rank LEACE would be required to recover the blanking
-delta. This is consistent with the
-\S\ref{sec:blank} reading: pretraining gives CLIP a clean, low-rank
-title confound; supervised fine-tuning on Wikipedia spreads an
-analogous title-region binding across DINOv2's feature space.
+retrieval untouched (0.912). A rank sweep
+$\{4, 16, 64, 256, 1024\}$ shows the title-region binding lives
+in a 16--64-dimensional subspace: rank-4 LEACE drops R@10 by
+$0.030$, rank-16 by $0.136$, rank-64 by $0.266$ (matching
+pixel-blanking), and rank-256 by $0.385$. Pretraining gives CLIP
+and SigLIP a clean low-rank title confound a single axis can
+erase; fine-tuning on a single visual corpus spreads the analogous
+binding across an order-of-magnitude wider subspace of the 8\,448-d
+SALAD descriptor.
 
 \section{Discussion and Limitations}
 \label{sec:disc}
