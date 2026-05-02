@@ -234,22 +234,35 @@ training minimises a multi-similarity contrastive loss
 \subsection{Training (fine-tunes)}
 \label{sec:training}
 
-We train each (encoder, head) configuration with the procedure of
-Figure~\ref{fig:train}. Each batch contains 4 pages $\times$ 4
-crops $=$ 16 images. Within a batch, crops sharing a page are
-positives; otherwise negatives. The loss is multi-similarity
-\cite{wang2019msloss}. The optimiser is AdamW with weight decay
-$10^{-4}$, gradient clip 1.0, linear warmup over 5\,\% of steps
-followed by cosine decay. Backbone learning rate is $10^{-5}$ for
-DINOv2 and $10^{-7}$ for CLIP and SigLIP (a higher rate causes
-catastrophic representation collapse on the latter two), head
-learning rate $5\times 10^{-4}$ throughout. Heads are either an
-MLP \mbox{($768\to 512\to 256$)} or the SALAD optimal-transport
-aggregator \cite{izquierdo2024salad} producing an 8\,448-d
-descriptor. Only the head and the last four ViT blocks are
-trainable. Fine-tunes use 30\,000 training pages $\times$ 3 epochs
-(5\,625 optimiser steps), one seed; the saturation
-diagnostic uses 50\,000 pages.
+Hyperparameters in Table~\ref{tab:hparams}.
+Heads are either an MLP ($768{\to}512{\to}256$) or the SALAD
+optimal-transport aggregator \cite{izquierdo2024salad} (8\,448-d).
+The CLIP/SigLIP backbone LR of $10^{-7}$ is the highest that
+avoided immediate representation collapse; DINOv2 trains stably
+at $10^{-5}$.
+
+\begin{table}[t]
+\caption{Training hyperparameters. Track A is the headline 30\,k
+grid, Track B the 50\,k saturation diagnostic.}
+\label{tab:hparams}
+\centering
+\small
+\begin{tabular}{ll}
+\toprule
+field & value \\
+\midrule
+batch & 4 pages $\times$ 4 crops $= 16$ \\
+loss & multi-similarity \cite{wang2019msloss} \\
+optimiser & AdamW, wd $=10^{-4}$, clip $=1.0$ \\
+schedule & 5\,\% linear warmup $\to$ cosine to $0$ \\
+$\eta_{\text{backbone}}$ & $10^{-5}$ (DINOv2), $10^{-7}$ (CLIP/SigLIP) \\
+$\eta_{\text{head}}$ & $5{\times}10^{-4}$ \\
+trainable & last 4 of 12 ViT blocks $+$ head \\
+epochs & 3 \\
+train pages & 30\,000 (Track A), 50\,000 (Track B) \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \begin{figure}[t]
 \centering
@@ -282,7 +295,13 @@ earlier crop-vs-crop formulations of this task.
 
 \textbf{Protocol B --- anchor-pool transfer.} The anchor-pool
 benchmark of Figure~\ref{fig:bench} uses 118 valid validation
-triplets from \texttt{Wikipedia\_SS\_withanchors}. For each anchor
+triplets from an in-house anchor-pool slice we derive from
+\texttt{Tevatron/wiki-ss-corpus}: each triplet pairs an anchor crop
+with positive same-page crops sampled from outside the anchor's
+non-overlapping crop neighbourhood plus hard-negative crops drawn
+from unrelated pages.\footnote{Anchor-pool slice (118 valid validation
+triplets) constructed once from the same corpus as Protocol-A; not
+re-used for training.} For each anchor
 crop, the pool is the union of its positives and hard negatives
 ($\sim$7 images). We rank the pool by cosine similarity and
 report R@1. This measures cross-set transfer: anchors and pool
@@ -350,7 +369,7 @@ plain ViT (0.029). Despite ViT-H/14 being roughly 5$\times$ larger
 than the ViT-B encoders, image-only predictive pretraining
 out-of-the-box does not transfer to visual document retrieval.
 Q2's optimistic reading is therefore falsified at the zero-shot
-level: a post-hoc text adapter (\S\ref{sec:disc}) is the only
+level: a post-hoc text adapter (\S\ref{sec:adapter}) is the only
 remaining path to rescue I-JEPA.
 
 (iii) The CLIP--SigLIP gap (0.155) is real but small relative to
@@ -506,7 +525,8 @@ Run & orig.\ R@1 & b-15 R@1 & b-30 R@1 \\
 \rowcolor{cFT} CLIP-SALAD-30k     & 0.551 & 0.686 & 0.720 \\
 \rowcolor{cFT} CLIP-MLP-30k$^\dagger$ & 0.932 & 0.932 & 0.932 \\
 \bottomrule
-\multicolumn{4}{l}{\footnotesize $^\dagger$~Collapsed model.}
+\multicolumn{4}{l}{\footnotesize $^\dagger$~Collapsed model;
+0.932 is tie-breaking in a 7-element pool, not retrieval.}
 \end{tabular}
 \end{table}
 
@@ -647,31 +667,25 @@ Zero-shot DINOv2 is unmoved by either: the title direction barely
 exists as a structured axis in its feature space.
 
 Trained DINOv2-SALAD-50k splits the analysis. Pixel-blanking drops
-its R@10 from 0.911 to 0.670 ($-0.241$), but rank-1 LEACE leaves
-retrieval untouched (0.912). A rank sweep
-$\{4, 16, 64, 256, 1024\}$ shows the title-region binding lives
-in a 16--64-dimensional subspace: rank-4 LEACE drops R@10 by
-$0.030$, rank-16 by $0.136$, rank-64 by $0.266$ (matching
-pixel-blanking), and rank-256 by $0.385$. Pretraining gives CLIP
-and SigLIP a clean low-rank title confound a single axis can
-erase; fine-tuning on a single visual corpus spreads the analogous
-binding across an order-of-magnitude wider subspace of the 8\,448-d
-SALAD descriptor.
+its R@10 by $0.241$ but rank-1 LEACE leaves it untouched
+($0.911 \to 0.912$). A rank sweep recovers the blanking delta
+near rank-64: $\Delta_{\text{LEACE}} = -0.030, -0.136, -0.266$
+at ranks $4, 16, 64$. Pretraining gives the image-text encoders
+a single-axis title confound; fine-tuning on Wikipedia spreads
+the analogous binding across a $\approx 16$--$64$-d subspace of
+the $8\,448$-d SALAD descriptor.
 
 \section{Discussion and Limitations}
 \label{sec:disc}
 
-All training uses a single random seed. The cross-family
-ordering is large enough to read past seed noise (closest gap
-$\Delta$R@10 $=0.093$, well outside typical jitter), but
-within-family comparisons (CLIP-SALAD vs.\ CLIP-MLP) need
-multi-seed reruns. Pool size $P{=}2000$ is small versus industrial
-$10^5$--$10^6$; numbers are within-table comparable, not cross-paper.
-At $224^2$ input, body text is sub-pixel, so ``reading'' here means
-heading-level text plus layout, not fluent content. The I-JEPA
-adapter R@10 $=$~0.197 is evidence of latent alignment, not a
-practical recipe; matching CLIP-level retrieval would need a
-non-linear adapter and larger paired-data training.
+Single-seed; cross-family ordering reads past noise
+($\Delta$R@10 $\ge 0.09$), within-family numbers need multi-seed
+reruns. $P{=}2000$ is small versus industrial corpora; numbers
+are within-table comparable. At $224^2$ input body text is
+sub-pixel, so ``reading'' here means heading-level text plus
+layout. English Wikipedia only. All experiments run on one Tesla
+T4, ${\approx}66$ GPU-h total; code at
+\url{github.com/hkanpak21/Comp447_VISWORD}, eval seed $42$.
 
 \section{Conclusion}
 \label{sec:conclusions}
