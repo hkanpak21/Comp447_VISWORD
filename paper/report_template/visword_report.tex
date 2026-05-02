@@ -716,4 +716,33 @@ projection.
 \bibliography{visword_report}
 \bibliographystyle{comp547}
 
+\onecolumn
+\appendix
+
+\section{Appendix figures}
+\label{app:figs}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.6\linewidth]{figures/blank_example.pdf}
+\caption{Pixel-level title blanking used in \S\ref{sec:blank}: the
+top 15\,\% of every eval page is painted white before cropping.
+``Reading'' the title text is no longer possible after blanking;
+the headers, infoboxes, and body remain.}
+\label{fig:blank-example}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.7\linewidth]{figures/leace_rank_sweep.pdf}
+\caption{LEACE rank sweep on trained DINOv2-SALAD-50k
+(\S\ref{sec:leace}). The Protocol-A R@10 of the LEACE-erased
+descriptors is plotted against the rank of the protected
+attribute $Z$. The pixel-blanking delta ($-0.241$, dashed orange)
+is matched at rank $\approx 64$, indicating the trained
+title-region binding lives in a $16$--$64$-dim subspace of the
+$8\,448$-d SALAD descriptor.}
+\label{fig:leace-sweep}
+\end{figure}
+
 \end{document}
