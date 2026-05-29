@@ -59,12 +59,13 @@ def boxed_image(img: Image.Image, ocr: list, bert_imp: dict,
 
 def main() -> int:
     p = argparse.ArgumentParser()
+    PROJECT_ROOT = Path(__file__).resolve().parents[1]
     p.add_argument("--cache-dir", type=Path,
-                   default="/scratch/hkanpak21/VISWORD/data/wiki_ss")
+                   default=PROJECT_ROOT / "data" / "wiki_ss")
     p.add_argument("--summary-json", type=Path,
-                   default="/scratch/hkanpak21/VISWORD/runs/_attn_corr/n200.json")
+                   default=PROJECT_ROOT / "runs" / "_attn_corr" / "n200.json")
     p.add_argument("--out-dir", type=Path,
-                   default="/scratch/hkanpak21/VISWORD/runs/_attn_corr/viz")
+                   default=PROJECT_ROOT / "runs" / "_attn_corr" / "viz")
     p.add_argument("--n", type=int, default=3)
     args = p.parse_args()
 

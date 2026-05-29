@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #SBATCH --job-name=vw-eval-full
-#SBATCH --output=/scratch/hkanpak21/VISWORD/runs/_slurm/evalfull_%j.out
-#SBATCH --error=/scratch/hkanpak21/VISWORD/runs/_slurm/evalfull_%j.err
-#SBATCH --partition=t4_ai
-#SBATCH --qos=comx29
-#SBATCH --account=comx29
+#SBATCH --output=runs/_slurm/evalfull_%j.out
+#SBATCH --error=runs/_slurm/evalfull_%j.err
+#SBATCH --partition=ai
+#SBATCH --qos=ai
+#SBATCH --account=ai
 #SBATCH --gres=gpu:tesla_t4:1
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -23,15 +23,15 @@
 # Or: RUN_DIR=latest (defaults to most recent run dir)
 
 set -euo pipefail
-source /scratch/hkanpak21/VISWORD/scripts/_env.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../scripts/_env.sh"
 
-python /scratch/hkanpak21/VISWORD/scripts/ensure_dinov2_hub.py || true
+python "$(dirname "${BASH_SOURCE[0]}")/../scripts/ensure_dinov2_hub.py" || true
 
 export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 HF_DATASETS_OFFLINE=1
 
 RUN_DIR_IN="${RUN_DIR:-latest}"
 if [ "$RUN_DIR_IN" = "latest" ]; then
-    RUN_DIR="$(ls -dt /scratch/hkanpak21/VISWORD/runs/*/ 2>/dev/null \
+    RUN_DIR="$(ls -dt "$PROJECT_ROOT"/runs/*/ 2>/dev/null \
                | grep -v '/_slurm/' | grep -v '/_dedup_logs/' | head -1 | sed 's:/*$::')"
     if [ -z "$RUN_DIR" ]; then
         echo "ERROR: RUN_DIR=latest but no run directory found." >&2
@@ -58,4 +58,4 @@ python -u -m visword.eval_phase2_titleblanked --run-dir "$RUN_DIR" --checkpoint 
 # Interpret (DINOv2 family only; CLIP variants are gated inside the module).
 python -u -m visword.interpret --run-dir "$RUN_DIR" --checkpoint "$CHECKPOINT" --k 4 || true
 
-python /scratch/hkanpak21/VISWORD/scripts/summarise_run.py "$RUN_DIR" || true
+python "$(dirname "${BASH_SOURCE[0]}")/../scripts/"summarise_run.py "$RUN_DIR" || true

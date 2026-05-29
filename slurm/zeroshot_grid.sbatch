@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #SBATCH --job-name=vw-zs-grid
-#SBATCH --output=/scratch/hkanpak21/VISWORD/runs/_slurm/zsgrid_%j.out
-#SBATCH --error=/scratch/hkanpak21/VISWORD/runs/_slurm/zsgrid_%j.err
-#SBATCH --partition=t4_ai
-#SBATCH --qos=comx29
-#SBATCH --account=comx29
+#SBATCH --output=runs/_slurm/zsgrid_%j.out
+#SBATCH --error=runs/_slurm/zsgrid_%j.err
+#SBATCH --partition=ai
+#SBATCH --qos=ai
+#SBATCH --account=ai
 #SBATCH --gres=gpu:tesla_t4:1
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -16,14 +16,14 @@
 # alignment heatmap. ~3 GPU-hours total.
 
 set -euo pipefail
-source /scratch/hkanpak21/VISWORD/scripts/_env.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../scripts/_env.sh"
 
-python /scratch/hkanpak21/VISWORD/scripts/ensure_dinov2_hub.py || true
+python "$(dirname "${BASH_SOURCE[0]}")/../scripts/ensure_dinov2_hub.py" || true
 
 # DO NOT set offline mode — SigLIP / I-JEPA need to load from local HF cache,
 # which the cache_dir env in _env.sh should already point to.
 
-cd /scratch/hkanpak21/VISWORD
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
 mkdir -p runs/_zeroshot
 
 NUM_PAGES="${NUM_PAGES:-2000}"

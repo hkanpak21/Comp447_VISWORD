@@ -131,8 +131,9 @@ def _crop_pages(rows: list[dict], cache_dir: Path,
 
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
+    PROJECT_ROOT = Path(__file__).resolve().parents[1]
     p.add_argument("--cache-dir", type=Path,
-                   default="/scratch/hkanpak21/VISWORD/data/wiki_ss")
+                   default=PROJECT_ROOT / "data" / "wiki_ss")
     p.add_argument("--num-pages", type=int, default=500,
                    help="smaller default than Protocol-A because late "
                         "interaction is O(N_doc * Tq * Td) per query")

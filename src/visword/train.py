@@ -127,6 +127,9 @@ def _build_model(cfg: Config) -> torch.nn.Module:
     if cfg.model_kind == "linear_probe":
         from visword.models.zeroshot import DINOv2LinearProbe
         return DINOv2LinearProbe(cfg)
+    if cfg.model_kind == "frozen_adapter":
+        from visword.models.frozen_adapter import FrozenBackboneAdapter
+        return FrozenBackboneAdapter(cfg)
     if cfg.model_kind == "clip_salad":
         from visword.models.clip_salad import CLIPSALAD
         return CLIPSALAD(cfg)

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #SBATCH --job-name=vw-ijepa-adapt
-#SBATCH --output=/scratch/hkanpak21/VISWORD/runs/_slurm/ijepa_adapt_%j.out
-#SBATCH --error=/scratch/hkanpak21/VISWORD/runs/_slurm/ijepa_adapt_%j.err
-#SBATCH --partition=t4_ai
-#SBATCH --qos=comx29
-#SBATCH --account=comx29
+#SBATCH --output=runs/_slurm/ijepa_adapt_%j.out
+#SBATCH --error=runs/_slurm/ijepa_adapt_%j.err
+#SBATCH --partition=ai
+#SBATCH --qos=ai
+#SBATCH --account=ai
 #SBATCH --gres=gpu:tesla_t4:1
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -13,12 +13,14 @@
 #SBATCH --time=03:00:00
 
 set -euo pipefail
-source /scratch/hkanpak21/VISWORD/scripts/_env.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../scripts/_env.sh"
 
-cd /scratch/hkanpak21/VISWORD
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
 PYTHONPATH=src python -u -m scripts.ijepa_text_adapter \
-    --n-train 4000 --n-eval 1000 --steps 3000 --seed 42
+    --adapter-kind linear \
+    --n-train 4000 --n-eval 1000 --steps 3000 --seed 42 \
+    --out-dir "$PROJECT_ROOT"/runs/ijepa_text_adapter_sweep
 
 echo
 echo "=== summary ==="
-cat /scratch/hkanpak21/VISWORD/runs/ijepa_adapter/adapter_report_seed42.json
+cat "$PROJECT_ROOT"/runs/ijepa_text_adapter_sweep/summary.json

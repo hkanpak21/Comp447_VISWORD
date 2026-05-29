@@ -70,8 +70,9 @@ def encode_trained(run_dir: Path, image_paths, device, batch_size=4):
 
 
 def main() -> int:
+    from visword.paths import PROJECT_ROOT
     # Same sample as platonic_alignment.py
-    cache_dir = Path("/scratch/hkanpak21/VISWORD/data/wiki_ss")
+    cache_dir = PROJECT_ROOT / "data" / "wiki_ss"
     manifest = json.load(open(cache_dir / "manifest.json"))
     rows = manifest["rows"]
     np.random.seed(42)
@@ -85,10 +86,32 @@ def main() -> int:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"device: {device}, n=500")
 
+    import getpass
+
+    def get_run_dir(subpath: str) -> Path:
+        local_path = PROJECT_ROOT / "runs" / subpath
+        if local_path.exists():
+            return local_path
+        
+        # Check via SHARED_PROJECT_ROOT env variable
+        shared_root = os.environ.get("SHARED_PROJECT_ROOT")
+        if shared_root:
+            shared_path = Path(shared_root) / "runs" / subpath
+            if shared_path.exists():
+                return shared_path
+                
+        # Fallback to current user's scratch space dynamically
+        user = os.environ.get("USER") or getpass.getuser()
+        user_path = Path(f"/scratch/{user}/VISWORD/runs") / subpath
+        if user_path.exists():
+            return user_path
+            
+        return local_path
+
     # Trained checkpoints (final versions at 10k train / 3 epochs — salad-main, cls-main)
-    salad_main_dir = Path("/scratch/hkanpak21/VISWORD/runs/2026-04-19_201330_324858ad_salad-main_138f")
-    cls_main_dir   = Path("/scratch/hkanpak21/VISWORD/runs/2026-04-19_213919_324858ad_cls-main_db61")
-    linear_probe_dir = Path("/scratch/hkanpak21/VISWORD/runs/2026-04-21_195057_6d06122e_row07-linear-probe_385b")
+    salad_main_dir = get_run_dir("2026-04-19_201330_324858ad_salad-main_138f")
+    cls_main_dir   = get_run_dir("2026-04-19_213919_324858ad_cls-main_db61")
+    linear_probe_dir = get_run_dir("2026-04-21_195057_6d06122e_row07-linear-probe_385b")
 
     encoders: dict[str, np.ndarray] = {}
     t0 = time.time()
@@ -143,7 +166,7 @@ def main() -> int:
             }
             print(f"  {a:18s} ↔ {b:18s}: CKA={cka_v:+.3f}  Procrustes={proc:.3f}  knn@10={knn_10:.3f}")
 
-    out_dir = Path(f"/scratch/hkanpak21/VISWORD/runs/platonic_trained_{time.strftime('%Y-%m-%d_%H%M%S')}")
+    out_dir = PROJECT_ROOT / "runs" / f"platonic_trained_{time.strftime('%Y-%m-%d_%H%M%S')}"
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "report.json").write_text(json.dumps(results, indent=2))
     print(f"\n→ {out_dir}/report.json")

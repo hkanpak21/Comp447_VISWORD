@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #SBATCH --job-name=vw-inspect
-#SBATCH --output=/scratch/hkanpak21/VISWORD/runs/_slurm/inspect_parquet_%j.out
-#SBATCH --error=/scratch/hkanpak21/VISWORD/runs/_slurm/inspect_parquet_%j.err
-#SBATCH --partition=t4_ai
-#SBATCH --qos=comx29
-#SBATCH --account=comx29
+#SBATCH --output=runs/_slurm/inspect_parquet_%j.out
+#SBATCH --error=runs/_slurm/inspect_parquet_%j.err
+#SBATCH --partition=ai
+#SBATCH --qos=ai
+#SBATCH --account=ai
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
@@ -12,7 +12,7 @@
 #SBATCH --time=00:30:00
 
 set -euo pipefail
-source /scratch/hkanpak21/VISWORD/scripts/_env.sh
-python -u /scratch/hkanpak21/VISWORD/scripts/inspect_wiki_ss_arrow.py \
-    > /scratch/hkanpak21/VISWORD/data/wiki_ss_arrow_index.json
-echo "wrote /scratch/hkanpak21/VISWORD/data/wiki_ss_arrow_index.json"
+source "$(dirname "${BASH_SOURCE[0]}")/../scripts/_env.sh"
+python -u "$(dirname "${BASH_SOURCE[0]}")/../scripts/"inspect_wiki_ss_arrow.py \
+    > "$PROJECT_ROOT"/data/wiki_ss_arrow_index.json
+echo "wrote "$PROJECT_ROOT"/data/wiki_ss_arrow_index.json"

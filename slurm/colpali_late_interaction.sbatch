@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #SBATCH --job-name=vw-colpali
-#SBATCH --output=/scratch/hkanpak21/VISWORD/runs/_slurm/colpali_%j.out
-#SBATCH --error=/scratch/hkanpak21/VISWORD/runs/_slurm/colpali_%j.err
-#SBATCH --partition=t4_ai
-#SBATCH --qos=comx29
-#SBATCH --account=comx29
+#SBATCH --output=runs/_slurm/colpali_%j.out
+#SBATCH --error=runs/_slurm/colpali_%j.err
+#SBATCH --partition=ai
+#SBATCH --qos=ai
+#SBATCH --account=ai
 #SBATCH --gres=gpu:tesla_t4:1
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -13,9 +13,9 @@
 #SBATCH --time=04:00:00
 
 set -euo pipefail
-source /scratch/hkanpak21/VISWORD/scripts/_env.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../scripts/_env.sh"
 
-cd /scratch/hkanpak21/VISWORD
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
 mkdir -p runs/_colpali
 
 PYTHONPATH=src python -u -m scripts.colpali_late_interaction \

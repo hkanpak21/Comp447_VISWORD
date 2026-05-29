@@ -21,7 +21,7 @@ cluster with any training page.
 Usage::
 
     PYTHONPATH=src python -m scripts.dedup_eval_split \\
-        --cache-dir /scratch/hkanpak21/VISWORD/data/wiki_ss \\
+        --cache-dir /scratch/<USER>/VISWORD/data/wiki_ss \\
         --workers 8 --hamming 6
 """
 from __future__ import annotations

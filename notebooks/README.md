@@ -34,7 +34,7 @@ From a machine where you have GitHub credentials configured:
 # 1. Pull the cluster's master into a local clone (uses your SSH key to the cluster)
 git clone https://github.com/hkanpak21/Comp447_VISWORD.git
 cd Comp447_VISWORD
-git remote add cluster ssh://hkanpak21@<cluster-host>/scratch/hkanpak21/VISWORD
+git remote add cluster ssh://<your-username>@<cluster-host>/scratch/<your-username>/VISWORD
 git fetch cluster master
 
 # 2. Fast-forward main to cluster/master (or merge if you have local edits on main)

@@ -27,6 +27,6 @@ echo
 echo "wrote $OUT ($SIZE)"
 echo
 echo "Next steps:"
-echo "  1) scp off VALAR:     scp hkanpak21@valar:$OUT ."
+echo "  1) scp off VALAR:     scp \$USER@valar:\$OUT ."
 echo "  2) upload to Drive at: MyDrive/VISWORD/VISWORD_src.zip"
 echo "     (the notebook's Part 0 will extract it automatically)"

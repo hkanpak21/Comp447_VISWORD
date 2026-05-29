@@ -264,9 +264,10 @@ def encode_ijepa(paths, device):
 
 
 def main() -> int:
+    from visword.paths import PROJECT_ROOT
     parser = argparse.ArgumentParser()
     parser.add_argument("--cache-dir", type=Path,
-                        default="/scratch/hkanpak21/VISWORD/data/wiki_ss")
+                        default=PROJECT_ROOT / "data" / "wiki_ss")
     parser.add_argument("--n-samples", type=int, default=1000)
     parser.add_argument("--encoders", nargs="+",
                         default=["dinov2", "clip_image", "siglip_image", "imagenet_vit",
@@ -343,7 +344,7 @@ def main() -> int:
             print(f"  {a:12s} ↔ {b:12s}: CKA={cka_v:.3f}  Procrustes={proc:.3f}  "
                   f"knn@5={knn_5:.3f}  knn@10={knn_10:.3f}")
 
-    out_dir = Path(f"/scratch/hkanpak21/VISWORD/runs/platonic_alignment_{time.strftime('%Y-%m-%d_%H%M%S')}")
+    out_dir = PROJECT_ROOT / "runs" / f"platonic_alignment_{time.strftime('%Y-%m-%d_%H%M%S')}"
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "report.json").write_text(json.dumps(results, indent=2))
     print(f"\n→ {out_dir}/report.json")

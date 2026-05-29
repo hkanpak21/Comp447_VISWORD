@@ -10,7 +10,7 @@
 #
 # Submit example:
 #   sbatch \
-#     --partition=t4_ai \
+#     --partition=ai \
 #     --time=02:00:00 \
 #     --gres=gpu:tesla_t4:1 \
 #     --mem=24G \
@@ -25,7 +25,7 @@ set -euo pipefail
 : "${RUN_DIR:?RUN_DIR env var required}"
 : "${REPO_ROOT:?REPO_ROOT env var required}"
 
-CONDA_ENV="${CONDA_ENV:-/scratch/hkanpak21/conda_envs/visword}"
+CONDA_ENV="${CONDA_ENV:-/scratch/${USER}/conda_envs/visword}"
 
 cd "$REPO_ROOT"
 

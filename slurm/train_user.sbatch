@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Generic training sbatch for any cluster user (not pinned to hkanpak21).
+# Generic training sbatch for any cluster user (not pinned to bbakay22).
 #
 # Required env-vars (set via `--export=ALL,VAR=value,...`):
 #   CONFIG     — path to a configs/*.yaml file (relative to repo root)
@@ -15,14 +15,14 @@
 # Submit example (assume you SSH'd in as alice; visword repo at /scratch/alice/visword):
 #
 #   sbatch \
-#     --partition=t4_ai \
+#     --partition=ai \
 #     --time=07:00:00 \
 #     --gres=gpu:tesla_t4:1 \
 #     --mem=32G \
 #     --cpus-per-task=4 \
 #     --output=/scratch/alice/visword/_slurm/train_%j.out \
 #     --error=/scratch/alice/visword/_slurm/train_%j.err \
-#     --export=ALL,CONFIG=configs/grid_dinov2_mlp_30k.yaml,REPO_ROOT=/scratch/alice/visword,DATA_CACHE=/scratch/hkanpak21/VISWORD/data/wiki_ss,RUNS_ROOT=/scratch/alice/visword/runs \
+#     --export=ALL,CONFIG=configs/grid_dinov2_mlp_30k.yaml,REPO_ROOT=/scratch/alice/visword,DATA_CACHE="$PROJECT_ROOT"/data/wiki_ss,RUNS_ROOT=/scratch/alice/visword/runs \
 #     /scratch/alice/visword/slurm/train_user.sbatch
 
 set -euo pipefail
@@ -32,7 +32,7 @@ set -euo pipefail
 : "${DATA_CACHE:?DATA_CACHE env var required}"
 : "${RUNS_ROOT:?RUNS_ROOT env var required}"
 
-CONDA_ENV="${CONDA_ENV:-/scratch/hkanpak21/conda_envs/visword}"
+CONDA_ENV="${CONDA_ENV:-/scratch/${USER}/conda_envs/visword}"
 
 cd "$REPO_ROOT"
 mkdir -p "$RUNS_ROOT" "$REPO_ROOT/_slurm"
@@ -58,7 +58,7 @@ if [ ! -d "$REPO_ROOT/third_party/salad" ]; then
 fi
 
 # Run training. We override the cache path AND runs-root so they live
-# under the submitting user's scratch — never write to hkanpak21's tree.
+# under the submitting user's scratch — never write to bbakay22's tree.
 export PYTHONPATH=src
 python -u -m visword.train \
     --config "$CONFIG" \

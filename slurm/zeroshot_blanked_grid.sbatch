@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #SBATCH --job-name=vw-zs-blank
-#SBATCH --output=/scratch/hkanpak21/VISWORD/runs/_slurm/zsblank_%j.out
-#SBATCH --error=/scratch/hkanpak21/VISWORD/runs/_slurm/zsblank_%j.err
-#SBATCH --partition=t4_ai
-#SBATCH --qos=comx29
-#SBATCH --account=comx29
+#SBATCH --output=runs/_slurm/zsblank_%j.out
+#SBATCH --error=runs/_slurm/zsblank_%j.err
+#SBATCH --partition=ai
+#SBATCH --qos=ai
+#SBATCH --account=ai
 #SBATCH --gres=gpu:tesla_t4:1
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -13,10 +13,10 @@
 #SBATCH --time=04:00:00
 
 set -euo pipefail
-source /scratch/hkanpak21/VISWORD/scripts/_env.sh
-python /scratch/hkanpak21/VISWORD/scripts/ensure_dinov2_hub.py || true
+source "$(dirname "${BASH_SOURCE[0]}")/../scripts/_env.sh"
+python "$(dirname "${BASH_SOURCE[0]}")/../scripts/ensure_dinov2_hub.py" || true
 
-cd /scratch/hkanpak21/VISWORD
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
 mkdir -p runs/_zeroshot_blanked
 
 # Run each of the six zero-shot encoders with the title region of every

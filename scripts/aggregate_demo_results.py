@@ -22,7 +22,7 @@ import csv
 import json
 from pathlib import Path
 
-ROOT = Path("/scratch/hkanpak21/VISWORD")
+ROOT = Path(__file__).resolve().parents[1]
 RUNS = ROOT / "runs"
 DEMO = RUNS / "_demo"
 ZS = RUNS / "_zeroshot"

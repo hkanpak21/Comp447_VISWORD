@@ -1,0 +1,23 @@
+# I-JEPA ViT-H/14 frozen + Linear adapter (1280 → 256)
+experiment_name: adapter-ijepa-linear
+model_kind: frozen_adapter
+
+backbone:
+  arch: ijepa_vith14
+  feature_dim: 1280
+  num_trainable_blocks: 0
+
+adapter:
+  kind: linear
+  output_dim: 256
+
+data:
+  num_train_samples: 10000
+  num_eval_samples: 1000
+
+train:
+  loss: multisim
+  batch_size: 8
+  epochs: 3
+  lr_backbone: 0.0
+  lr_head: 5.0e-4

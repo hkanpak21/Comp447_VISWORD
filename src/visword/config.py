@@ -32,9 +32,14 @@ class CropperConfig(_Strict):
 
 
 class BackboneConfig(_Strict):
-    arch: Literal["dinov2_vitb14", "dinov2_vits14"] = "dinov2_vitb14"
+    arch: Literal["dinov2_vitb14", "dinov2_vits14", "clip_vitb16", "ijepa_vith14"] = "dinov2_vitb14"
     num_trainable_blocks: int = 4
     feature_dim: int = 768
+
+
+class AdapterConfig(_Strict):
+    kind: Literal["linear", "mlp", "bottleneck"] = "linear"
+    output_dim: int = 256
 
 
 class SaladConfig(_Strict):
@@ -73,6 +78,7 @@ class Config(_Strict):
         "cls", "salad",
         "linear_probe",
         "clip_cls", "clip_salad",
+        "frozen_adapter",
         "zeroshot_dinov2_cls", "zeroshot_dinov2_mean",
         "zeroshot_clip_image", "zeroshot_imagenet_vit",
     ] = "salad"
@@ -80,6 +86,7 @@ class Config(_Strict):
     cropper: CropperConfig = Field(default_factory=CropperConfig)
     backbone: BackboneConfig = Field(default_factory=BackboneConfig)
     salad: SaladConfig = Field(default_factory=SaladConfig)
+    adapter: AdapterConfig = Field(default_factory=AdapterConfig)
     train: TrainConfig = Field(default_factory=TrainConfig)
     eval: EvalConfig = Field(default_factory=EvalConfig)
 

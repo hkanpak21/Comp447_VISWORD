@@ -1,26 +1,15 @@
 #!/usr/bin/env python3
-r"""I-JEPA + text adapter capacity sweep (Q3 follow-up).
+r"""Backbone + text adapter capacity sweep.
 
-Hypothesis: I-JEPA's image-only predictive features are zero-shot
-useless for visual document retrieval (R@10 = 0.015, below random
-init), but post-hoc adapters trained on (page-screenshot, page-title)
-pairs can recover text-aligned structure --- without ever using text
-supervision in the heavy backbone. This is the document-screenshot
-analogue of Jose et al. 2024 ``DINOv2 Meets Text''.
+Hypothesis: Frozen backbones can be aligned to text space using small adapters
+trained on (page-screenshot, page-title) pairs.
 
 Pipeline:
-
-  1. Sample N_train + N_eval pages (disjoint from the Track-A train).
-  2. Encode each page-screenshot CENTER CROP with frozen I-JEPA
-     ($ x_i \in R^{1280} $).
-  3. Encode each page-title with a frozen text encoder
-     (BERT-base by default, $ y_i \in R^{768} $).
-  4. Fit an adapter via InfoNCE on L2-normalised projections,
-     $ \tau = 0.07 $, AdamW, ~3k steps.
-  5. Eval on held-out pages: text-to-image retrieval R@k where
-     gallery = adapter(x_j) and queries = y_q.
-
-Outputs to ``runs/ijepa_text_adapter_sweep/`` by default.
+  1. Sample N_train + N_eval pages.
+  2. Encode each page-screenshot with frozen backbone (I-JEPA, CLIP, DINOv2).
+  3. Encode each page-title with a frozen text encoder (BERT-base).
+  4. Fit an adapter via InfoNCE.
+  5. Eval on held-out pages.
 """
 from __future__ import annotations
 
@@ -40,6 +29,7 @@ from visword.data import manifest as M
 
 
 ADAPTER_KINDS = ("linear", "bottleneck", "mlp", "deep_mlp", "low_rank")
+BACKBONES = ("ijepa", "clip", "dinov2_cls", "dinov2_mean")
 
 
 @dataclass(frozen=True)
@@ -64,9 +54,6 @@ def _sample_pages(cache_dir: Path, n_train: int, n_eval: int, seed: int) -> tupl
     rows = manifest["rows"]
     rng = np.random.default_rng(seed)
     perm = rng.permutation(len(rows))
-    # Pick (train + eval) pages from the first 2*N positions of the seed=42
-    # shuffled deck used by zero-shot Protocol-A. Skip the first 2000 to
-    # avoid overlap with that eval slice.
     skip = 3000
     picks = perm[skip : skip + n_train + n_eval]
     train_rows = [rows[i] for i in picks[:n_train]]
@@ -75,7 +62,6 @@ def _sample_pages(cache_dir: Path, n_train: int, n_eval: int, seed: int) -> tupl
 
 
 def _read_text(row: dict, cache_dir: Path, source: str = "title") -> str:
-    """Pull the title (or title+body[:200]) for a row."""
     title = row.get("title", "")
     if source == "title":
         return title
@@ -96,11 +82,27 @@ def _center_crop_pil(im: Image.Image, target: int = 224) -> Image.Image:
 
 
 @torch.no_grad()
-def encode_ijepa_images(rows: list[dict], cache_dir: Path,
-                        device: torch.device, batch_size: int = 16) -> np.ndarray:
-    from visword.models.zeroshot import ZeroShotIJepa
+def encode_images(rows: list[dict], cache_dir: Path, backbone_name: str,
+                  device: torch.device, batch_size: int = 16) -> np.ndarray:
+    from visword.models.zeroshot import ZeroShotIJepa, ZeroShotCLIPImage, ZeroShotDINOv2
     from visword.data.light_dataset import default_transform
-    enc = ZeroShotIJepa(cfg=None).to(device).eval()
+    
+    if backbone_name == "ijepa":
+        enc = ZeroShotIJepa(cfg=None).to(device).eval()
+    elif backbone_name == "clip":
+        enc = ZeroShotCLIPImage(cfg=None).to(device).eval()
+    elif backbone_name == "dinov2_cls":
+        from visword.config import Config, BackboneConfig
+        # Minimal dummy config for DINOv2
+        cfg = Config.model_construct(backbone=BackboneConfig(arch="dinov2_vitb14", feature_dim=768))
+        enc = ZeroShotDINOv2(cfg=cfg, mode="cls").to(device).eval()
+    elif backbone_name == "dinov2_mean":
+        from visword.config import Config, BackboneConfig
+        cfg = Config.model_construct(backbone=BackboneConfig(arch="dinov2_vitb14", feature_dim=768))
+        enc = ZeroShotDINOv2(cfg=cfg, mode="mean_patch").to(device).eval()
+    else:
+        raise ValueError(f"unknown backbone {backbone_name}")
+
     tf = default_transform()
     out: list[np.ndarray] = []
     for i in range(0, len(rows), batch_size):
@@ -115,7 +117,7 @@ def encode_ijepa_images(rows: list[dict], cache_dir: Path,
         z = enc(x).cpu().numpy()
         out.append(z)
         if (i // batch_size) % 10 == 0:
-            print(f"  ijepa encode: {i + len(batch_rows)}/{len(rows)}", flush=True)
+            print(f"  {backbone_name} encode: {i + len(batch_rows)}/{len(rows)}", flush=True)
     return np.concatenate(out, axis=0)
 
 
@@ -132,8 +134,7 @@ def encode_bert_titles(rows: list[dict], cache_dir: Path,
         texts = [_read_text(r, cache_dir, source) for r in rows[i : i + batch_size]]
         enc = tok(texts, padding="max_length", truncation=True,
                   max_length=64, return_tensors="pt").to(device)
-        h = model(**enc).last_hidden_state            # (B, T, 768)
-        # mean-pool with attention mask
+        h = model(**enc).last_hidden_state
         mask = enc["attention_mask"].unsqueeze(-1).float()
         v = (h * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1)
         v = F.normalize(v, dim=-1)
@@ -142,7 +143,6 @@ def encode_bert_titles(rows: list[dict], cache_dir: Path,
 
 
 def info_nce(z_v: torch.Tensor, z_t: torch.Tensor, tau: float) -> torch.Tensor:
-    """Symmetric InfoNCE (CLIP-style)."""
     z_v = F.normalize(z_v, dim=-1)
     z_t = F.normalize(z_t, dim=-1)
     logits = z_v @ z_t.T / tau
@@ -152,7 +152,6 @@ def info_nce(z_v: torch.Tensor, z_t: torch.Tensor, tau: float) -> torch.Tensor:
 
 def build_text_adapter(kind: str, d_in: int, d_out: int,
                        rank: int = 64, hidden_dim: int = 2048) -> nn.Module:
-    """Build an I-JEPA-image -> text-space adapter."""
     if kind == "linear":
         return nn.Linear(d_in, d_out, bias=False)
     if kind == "low_rank":
@@ -180,7 +179,7 @@ def build_text_adapter(kind: str, d_in: int, d_out: int,
             nn.GELU(),
             nn.Linear(hidden_dim, d_out),
         )
-    raise ValueError(f"unknown adapter kind {kind!r}; expected one of {ADAPTER_KINDS}")
+    raise ValueError(f"unknown adapter kind {kind!r}")
 
 
 def count_parameters(model: nn.Module) -> int:
@@ -191,7 +190,6 @@ def train_adapter(adapter: nn.Module, x: torch.Tensor, y: torch.Tensor,
                   steps: int = 3000, batch: int = 256, lr: float = 1e-3,
                   tau: float = 0.07, weight_decay: float = 1e-4,
                   device: torch.device = torch.device("cpu")) -> dict:
-    """Train ``adapter`` on paired image/text features and return loss stats."""
     N = x.shape[0]
     adapter = adapter.to(device)
     opt = torch.optim.AdamW(adapter.parameters(), lr=lr, weight_decay=weight_decay)
@@ -217,10 +215,9 @@ def train_adapter(adapter: nn.Module, x: torch.Tensor, y: torch.Tensor,
 
 def text_to_image_retrieval(z_v_eval: torch.Tensor, z_t_eval: torch.Tensor,
                             k_values: list[int]) -> dict:
-    """For each text query y_q, rank gallery vectors by cosine."""
     z_v = F.normalize(z_v_eval, dim=-1)
     z_t = F.normalize(z_t_eval, dim=-1)
-    sim = z_t @ z_v.T                      # (Q, P) — query is text, gallery is image
+    sim = z_t @ z_v.T
     Q, P = sim.shape
     max_k = min(max(k_values), P)
     correct = (sim.topk(max_k, dim=1).indices == torch.arange(Q).unsqueeze(1))
@@ -239,8 +236,8 @@ def text_to_image_retrieval(z_v_eval: torch.Tensor, z_t_eval: torch.Tensor,
     }
 
 
-def _cache_name(split: str, n: int, text_source: str, seed: int) -> str:
-    return f"feats_{split}_n{n}_{text_source}_seed{seed}.npz"
+def _cache_name(backbone: str, split: str, n: int, text_source: str, seed: int) -> str:
+    return f"feats_{backbone}_{split}_n{n}_{text_source}_seed{seed}.npz"
 
 
 def load_or_encode_features(args: argparse.Namespace, device: torch.device) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -248,8 +245,8 @@ def load_or_encode_features(args: argparse.Namespace, device: torch.device) -> t
         args.cache_dir, args.n_train, args.n_eval, args.seed)
     print(f"sampled: train={len(train_rows)}, eval={len(eval_rows)}", flush=True)
 
-    cache_train = args.out_dir / _cache_name("train", args.n_train, args.text_source, args.seed)
-    cache_eval = args.out_dir / _cache_name("eval", args.n_eval, args.text_source, args.seed)
+    cache_train = args.out_dir / _cache_name(args.backbone, "train", args.n_train, args.text_source, args.seed)
+    cache_eval = args.out_dir / _cache_name(args.backbone, "eval", args.n_eval, args.text_source, args.seed)
 
     if cache_train.exists():
         d = np.load(cache_train)
@@ -257,8 +254,8 @@ def load_or_encode_features(args: argparse.Namespace, device: torch.device) -> t
         print(f"loaded train cache: x={x_train.shape}, y={y_train.shape}")
     else:
         t0 = time.time()
-        x_train = encode_ijepa_images(train_rows, args.cache_dir, device)
-        print(f"  ijepa train: {x_train.shape} in {time.time()-t0:.1f}s")
+        x_train = encode_images(train_rows, args.cache_dir, args.backbone, device)
+        print(f"  {args.backbone} train: {x_train.shape} in {time.time()-t0:.1f}s")
         t0 = time.time()
         y_train = encode_bert_titles(train_rows, args.cache_dir, device,
                                      source=args.text_source)
@@ -271,8 +268,8 @@ def load_or_encode_features(args: argparse.Namespace, device: torch.device) -> t
         print(f"loaded eval cache: x={x_eval.shape}, y={y_eval.shape}")
     else:
         t0 = time.time()
-        x_eval = encode_ijepa_images(eval_rows, args.cache_dir, device)
-        print(f"  ijepa eval: {x_eval.shape} in {time.time()-t0:.1f}s")
+        x_eval = encode_images(eval_rows, args.cache_dir, args.backbone, device)
+        print(f"  {args.backbone} eval: {x_eval.shape} in {time.time()-t0:.1f}s")
         t0 = time.time()
         y_eval = encode_bert_titles(eval_rows, args.cache_dir, device,
                                     source=args.text_source)
@@ -283,7 +280,6 @@ def load_or_encode_features(args: argparse.Namespace, device: torch.device) -> t
 
 
 def no_adapter_baseline(x_eval: np.ndarray, y_eval: np.ndarray) -> dict:
-    # Project I-JEPA to BERT dim by truncation/pad; this is a floor, not a model.
     d_t = y_eval.shape[1]
     if x_eval.shape[1] >= d_t:
         x_base = x_eval[:, :d_t]
@@ -332,9 +328,7 @@ def run_one_adapter(spec: AdapterSpec, x_train: np.ndarray, y_train: np.ndarray,
         device=device,
     )
     train_seconds = time.time() - t0
-    print(f"adapter trained in {train_seconds:.1f}s", flush=True)
-
-    print(f"\n=== adapted I-JEPA <-> BERT: {spec.label} ===", flush=True)
+    
     adapter = adapter.to(device).eval()
     with torch.no_grad():
         z_v_adapted = adapter(torch.from_numpy(x_eval.astype(np.float32)).to(device)).cpu()
@@ -348,113 +342,55 @@ def run_one_adapter(spec: AdapterSpec, x_train: np.ndarray, y_train: np.ndarray,
         "adapter": {
             "kind": spec.kind,
             "label": spec.label,
-            "rank": rank if spec.kind in {"low_rank", "bottleneck"} else None,
-            "hidden_dim": hidden_dim if spec.kind in {"mlp", "deep_mlp"} else None,
             "parameter_count": param_count,
         },
-        "n_train": args.n_train,
-        "n_eval": args.n_eval,
-        "seed": args.seed,
-        "text_source": args.text_source,
-        "steps": args.steps,
-        "batch_size": args.batch_size,
-        "lr": args.lr,
-        "tau": args.tau,
-        "weight_decay": args.weight_decay,
-        "ijepa_dim": d_in,
-        "text_dim": d_out,
+        "backbone": args.backbone,
         "train_loss": train_loss,
-        "train_seconds": train_seconds,
-        "baseline_no_adapter": baseline,
         "adapted": adapted_score,
         "improvement_R10": adapted_score["recall"]["10"] - baseline["recall"]["10"],
     }
-    out_path = args.out_dir / f"{spec.label}_seed{args.seed}.json"
-    out_path.write_text(json.dumps(report, indent=2))
-    print(f"wrote {out_path}", flush=True)
     return report
-
-
-def write_summary(reports: list[dict], baseline: dict, args: argparse.Namespace) -> Path:
-    rows = []
-    for r in reports:
-        rows.append({
-            "label": r["adapter"]["label"],
-            "kind": r["adapter"]["kind"],
-            "parameter_count": r["adapter"]["parameter_count"],
-            "train_loss_final": r["train_loss"]["final"],
-            "train_loss_min": r["train_loss"]["min"],
-            "recall": r["adapted"]["recall"],
-            "sanity": r["adapted"]["sanity"],
-            "improvement_R10": r["improvement_R10"],
-        })
-    summary = {
-        "n_train": args.n_train,
-        "n_eval": args.n_eval,
-        "seed": args.seed,
-        "text_source": args.text_source,
-        "baseline_no_adapter": baseline,
-        "adapters": rows,
-    }
-    out_path = args.out_dir / "summary.json"
-    out_path.write_text(json.dumps(summary, indent=2))
-    print(f"\nwrote {out_path}", flush=True)
-    return out_path
 
 
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     PROJECT_ROOT = Path(__file__).resolve().parents[1]
-    p.add_argument("--cache-dir", type=Path,
-                   default=PROJECT_ROOT / "data" / "wiki_ss")
+    p.add_argument("--backbone", choices=BACKBONES, default="ijepa")
+    p.add_argument("--cache-dir", type=Path, default=PROJECT_ROOT / "data" / "wiki_ss")
     p.add_argument("--n-train", type=int, default=4000)
     p.add_argument("--n-eval", type=int, default=1000)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--text-source", choices=["title", "title_body"], default="title")
-    p.add_argument("--out-dir", type=Path,
-                   default=PROJECT_ROOT / "runs" / "ijepa_text_adapter_sweep")
+    p.add_argument("--out-dir", type=Path, default=PROJECT_ROOT / "runs" / "backbone_text_adapter_sweep")
     p.add_argument("--steps", type=int, default=3000)
-    p.add_argument("--adapter-kind", choices=ADAPTER_KINDS, default="linear")
-    p.add_argument("--sweep", action="store_true",
-                   help="run the fixed capacity sweep instead of one adapter")
+    p.add_argument("--sweep", action="store_true")
     p.add_argument("--rank", type=int, default=64)
     p.add_argument("--hidden-dim", type=int, default=2048)
     p.add_argument("--batch-size", type=int, default=256)
     p.add_argument("--lr", type=float, default=1e-3)
     p.add_argument("--tau", type=float, default=0.07)
     p.add_argument("--weight-decay", type=float, default=1e-4)
-    p.add_argument("--smoke", action="store_true",
-                   help="short local/SLURM smoke defaults: 64 train, 32 eval, 2 steps, mlp")
     args = p.parse_args()
-
-    if args.smoke:
-        args.n_train = 64
-        args.n_eval = 32
-        args.steps = 2
-        args.adapter_kind = "mlp"
-        args.sweep = False
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"device: {device}", flush=True)
 
     x_train, y_train, x_eval, y_eval = load_or_encode_features(args, device)
-
-    # ---- baseline: no adapter (raw I-JEPA + BERT cosine) ----
-    print("\n=== baseline: raw I-JEPA <-> BERT (no adapter) ===")
     base_score = no_adapter_baseline(x_eval, y_eval)
-    print(json.dumps(base_score, indent=2), flush=True)
-
-    specs = default_sweep_specs(args.hidden_dim) if args.sweep else [
-        AdapterSpec(args.adapter_kind, rank=args.rank, hidden_dim=args.hidden_dim)
-    ]
-    reports = [
-        run_one_adapter(spec, x_train, y_train, x_eval, y_eval, base_score, args, device)
-        for spec in specs
-    ]
-    write_summary(reports, base_score, args)
+    
+    specs = default_sweep_specs(args.hidden_dim) if args.sweep else [AdapterSpec("linear")]
+    reports = [run_one_adapter(spec, x_train, y_train, x_eval, y_eval, base_score, args, device) for spec in specs]
+    
+    summary = {
+        "backbone": args.backbone,
+        "baseline": base_score,
+        "adapters": reports
+    }
+    out_path = args.out_dir / f"summary_{args.backbone}.json"
+    out_path.write_text(json.dumps(summary, indent=2))
+    print(f"wrote summary to {out_path}")
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()

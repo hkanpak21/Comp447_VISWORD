@@ -81,8 +81,9 @@ def _crop_pages_to_pil(rows: list[dict], cache_dir: Path,
 
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
+    PROJECT_ROOT = Path(__file__).resolve().parents[1]
     p.add_argument("--cache-dir", type=Path,
-                   default="/scratch/hkanpak21/VISWORD/data/wiki_ss")
+                   default=PROJECT_ROOT / "data" / "wiki_ss")
     p.add_argument("--encoder", required=True,
                    choices=["dinov2_cls", "clip_image", "siglip_image",
                             "imagenet_vit", "plain_vit", "ijepa"])

@@ -17,7 +17,8 @@ export PYTHONPATH="$PROJECT_ROOT/src:${PYTHONPATH:-}"
 # Activate the project conda env.
 # shellcheck disable=SC1091
 eval "$(conda shell.bash hook)"
-conda activate /scratch/hkanpak21/conda_envs/visword
+CONDA_ENV_PATH="${CONDA_ENV_PATH:-/scratch/${USER}/conda_envs/visword}"
+conda activate "$CONDA_ENV_PATH"
 
 mkdir -p "$PROJECT_ROOT/runs/_slurm"
 

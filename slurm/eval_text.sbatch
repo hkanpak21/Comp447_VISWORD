@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #SBATCH --job-name=vw-text
-#SBATCH --output=/scratch/hkanpak21/VISWORD/runs/_slurm/eval_text_%j.out
-#SBATCH --error=/scratch/hkanpak21/VISWORD/runs/_slurm/eval_text_%j.err
-#SBATCH --partition=t4_ai
-#SBATCH --qos=comx29
-#SBATCH --account=comx29
+#SBATCH --output=runs/_slurm/eval_text_%j.out
+#SBATCH --error=runs/_slurm/eval_text_%j.err
+#SBATCH --partition=ai
+#SBATCH --qos=ai
+#SBATCH --account=ai
 #SBATCH --gres=gpu:tesla_t4:1
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -13,8 +13,8 @@
 #SBATCH --time=00:30:00
 
 set -euo pipefail
-source /scratch/hkanpak21/VISWORD/scripts/_env.sh
-python /scratch/hkanpak21/VISWORD/scripts/ensure_dinov2_hub.py || true
+source "$(dirname "${BASH_SOURCE[0]}")/../scripts/_env.sh"
+python "$(dirname "${BASH_SOURCE[0]}")/../scripts/ensure_dinov2_hub.py" || true
 export HF_HUB_OFFLINE=0 TRANSFORMERS_OFFLINE=0 HF_DATASETS_OFFLINE=0
 
 : "${CONFIG:?need CONFIG}"

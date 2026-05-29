@@ -23,12 +23,35 @@ from pathlib import Path
 import matplotlib
 
 matplotlib.use("Agg")
+import os
+import getpass
 import matplotlib.pyplot as plt
 from scipy.stats import spearmanr
 
-ROOT = Path("/scratch/hkanpak21/VISWORD")
-PLAT = ROOT / "runs/platonic_alignment_2026-04-26_070508/report.json"
-ZS_DIR = ROOT / "runs/_zeroshot"
+ROOT = Path(__file__).resolve().parents[1]
+
+def get_path(rel_path: str) -> Path:
+    local_path = ROOT / rel_path
+    if local_path.exists():
+        return local_path
+    
+    # Resolve via env variables
+    shared_root = os.environ.get("SHARED_PROJECT_ROOT")
+    if shared_root:
+        shared_path = Path(shared_root) / rel_path
+        if shared_path.exists():
+            return shared_path
+            
+    # Fallback to current user's scratch space dynamically
+    user = os.environ.get("USER") or getpass.getuser()
+    user_path = Path(f"/scratch/{user}/VISWORD") / rel_path
+    if user_path.exists():
+        return user_path
+        
+    return local_path
+
+PLAT = get_path("runs/platonic_alignment_2026-04-26_070508/report.json")
+ZS_DIR = get_path("runs/_zeroshot")
 OUT_DIR = ROOT / "paper/report_template/figures"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 

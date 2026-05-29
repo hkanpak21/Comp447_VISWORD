@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #SBATCH --job-name=vw-netdiag
-#SBATCH --output=/scratch/hkanpak21/VISWORD/runs/_slurm/netdiag_%j.out
-#SBATCH --error=/scratch/hkanpak21/VISWORD/runs/_slurm/netdiag_%j.err
-#SBATCH --partition=t4_ai
-#SBATCH --qos=comx29
-#SBATCH --account=comx29
+#SBATCH --output=runs/_slurm/netdiag_%j.out
+#SBATCH --error=runs/_slurm/netdiag_%j.err
+#SBATCH --partition=ai
+#SBATCH --qos=ai
+#SBATCH --account=ai
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1

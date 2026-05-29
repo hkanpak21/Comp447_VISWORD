@@ -231,8 +231,9 @@ def saliency_mass_in_bbox(sal_grid: np.ndarray, img_size: tuple[int, int],
 
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
+    PROJECT_ROOT = Path(__file__).resolve().parents[1]
     p.add_argument("--cache-dir", type=Path,
-                   default="/scratch/hkanpak21/VISWORD/data/wiki_ss")
+                   default=PROJECT_ROOT / "data" / "wiki_ss")
     p.add_argument("--num-pages", type=int, default=200)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--encoders", nargs="+",
