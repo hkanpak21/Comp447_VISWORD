@@ -175,6 +175,25 @@ with `target-rows=50`:
 
 ---
 
+## Phase F — I-JEPA & Text-Target Pre-training
+
+### F1 `tests/test_ijepa_pretrain.py` `@pytest.mark.integration @pytest.mark.gpu`
+- `test_mask_collator`: Verify the `MaskCollator` produces correct shapes for context and target masks, and that there is zero overlap between them if overlap is disabled.
+- `test_jepa_mask_collator_wrapper`: Verify the `JepaMaskCollator` wrapper correctly handles dataset items (tuples of crop tensor and labels) and matches the batch size of the collator.
+- `test_ijepa_predictor`: Verify the visual predictor output matches the expected target shape `(B * npred * nenc, target_len, D)`.
+- `test_ijepa_pretrain_integration`: Run 1 step of training via `train_ijepa.py` and verify all required outputs (`config.resolved.yaml`, `provenance.json`, `metrics.jsonl`, checkpoints) are generated successfully.
+
+### F2 `tests/test_ijepa_text_pretrain.py` `@pytest.mark.integration @pytest.mark.gpu`
+- `test_dataset_text_returns`: Verify the `LightWikiScreenshotDataset` can return text strings (both titles and full texts) when configured with `return_text=True`.
+- `test_ijepa_text_predictor`: Verify that `VisionTransformerTextPredictor` outputs text embeddings matching the target dim and sequence length.
+- `test_ijepa_text_pretrain_integration`: Run 1 step of cross-modal pre-training via `train_ijepa_text.py` and verify all required log fields and run outputs are created correctly.
+
+### F3 `tests/test_ijepa_text_adapter.py`
+- `test_text_adapter_output_shapes`: Verify that the post-hoc linear and MLP adapter modules produce output tensors of the expected projection dimension.
+- `test_tiny_synthetic_adapter_report`: Verify that running the post-hoc sweep produces a summary report with metrics for all adapter kinds.
+
+---
+
 ## Test invocation examples
 
 ```bash

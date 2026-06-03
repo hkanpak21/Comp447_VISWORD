@@ -147,29 +147,7 @@ def phase2_recall_blanked(
     }
 
 
-def _load_cfg(run_dir: Path) -> Config:
-    cfg_path = run_dir / "config.resolved.yaml"
-    if not cfg_path.exists():
-        raise SystemExit(f"missing {cfg_path}")
-    return Config.model_validate(yaml.safe_load(cfg_path.read_text()))
-
-
-def _build_model_from_cfg(cfg: Config):
-    # Mirror eval_phase1_holdout._build_model_from_cfg.
-    if cfg.model_kind == "salad":
-        from visword.models.dinov2_salad import DINOv2SALAD
-        return DINOv2SALAD(cfg)
-    if cfg.model_kind == "linear_probe":
-        from visword.models.zeroshot import DINOv2LinearProbe
-        return DINOv2LinearProbe(cfg)
-    if cfg.model_kind == "clip_salad":
-        from visword.models.clip_salad import CLIPSALAD
-        return CLIPSALAD(cfg)
-    if cfg.model_kind == "clip_cls":
-        from visword.models.clip_salad import CLIPCLS
-        return CLIPCLS(cfg)
-    from visword.models.dinov2_cls import DINOv2CLS
-    return DINOv2CLS(cfg)
+from visword.eval_phase1 import _build_model_from_cfg, _load_checkpoint, _load_cfg
 
 
 def run_titleblanked_cli(run_dir: Path, *, blank_top_frac: float,
@@ -182,9 +160,7 @@ def run_titleblanked_cli(run_dir: Path, *, blank_top_frac: float,
         raise SystemExit(f"no checkpoint at {ckpt_path}")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = _build_model_from_cfg(cfg)
-    blob = torch.load(ckpt_path, map_location=device)
-    state = blob.get("model_state_dict", blob)
-    model.load_state_dict(state); model.to(device).eval()
+    blob = _load_checkpoint(model, ckpt_path, device)
 
     payload = phase2_recall_blanked(
         model, Path(cfg.data.anchors_cache_dir),

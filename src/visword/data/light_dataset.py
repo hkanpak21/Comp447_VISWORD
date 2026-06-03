@@ -52,6 +52,8 @@ class LightWikiScreenshotDataset(Dataset):
         transform: ImageTransform | None = None,
         k_per_page: int = 4,
         seed: int = 0,
+        return_text: bool = False,
+        text_source: str = "title",
     ) -> None:
         self.cache_dir = Path(cache_dir)
         manifest_path = self.cache_dir / "manifest.json"
@@ -73,6 +75,8 @@ class LightWikiScreenshotDataset(Dataset):
         self.transform = transform or default_transform()
         self.k_per_page = k_per_page
         self._rng = random.Random(seed)
+        self.return_text = return_text
+        self.text_source = text_source
 
     # ------------------------------------------------------------------
 
@@ -86,7 +90,7 @@ class LightWikiScreenshotDataset(Dataset):
             crops = self.cropper(im)   # already resized to target_size
         return crops
 
-    def __getitem__(self, i: int) -> tuple[torch.Tensor, int]:
+    def __getitem__(self, i: int) -> tuple[torch.Tensor, int] | tuple[torch.Tensor, str, int]:
         crops = self._load_and_crop(i)
         if len(crops) >= self.k_per_page:
             sampled = self._rng.sample(crops, self.k_per_page)
@@ -94,6 +98,20 @@ class LightWikiScreenshotDataset(Dataset):
             # Pad by resampling — rare on real Wikipedia screenshots, common on tests.
             sampled = list(crops) + self._rng.choices(crops, k=self.k_per_page - len(crops))
         tensors = torch.stack([self.transform(c) for c in sampled])    # (K, 3, H, W)
+        
+        if self.return_text:
+            row = self.rows[i]
+            text = ""
+            if self.text_source == "text" and "text_path" in row:
+                text_path = self.cache_dir / row["text_path"]
+                if text_path.exists():
+                    text = text_path.read_text(encoding="utf-8")
+                else:
+                    text = row.get("title", "")
+            else:
+                text = row.get("title", "")
+            return tensors, text, i
+
         return tensors, i     # use local row index as the "page label"
 
     # ------------------------------------------------------------------

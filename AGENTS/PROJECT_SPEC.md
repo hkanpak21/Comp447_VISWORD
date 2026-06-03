@@ -96,10 +96,15 @@ visword-salad/
 │       │   ├── salad_bridge.py  # adds third_party/salad to sys.path; re-exports SALAD + DINOv2 classes
 │       │   ├── dinov2_salad.py  # DINOv2 + official SALAD (our wrapper)
 │       │   ├── dinov2_cls.py    # CLS-only baseline
-│       │   └── bert_text.py     # BERT baseline for §12
+│       │   ├── bert_text.py     # BERT baseline for §12
+│       │   ├── ijepa_predictor.py # Meta-style official visual predictor
+│       │   ├── ijepa_masks.py    # Mask Collators for I-JEPA context/target selection
+│       │   └── ijepa_text_predictor.py # Text predictor mapping to language space
 │       │
 │       ├── losses.py            # InfoNCE multi-positive, Multi-Similarity, Triplet
 │       ├── train.py             # main training entry point
+│       ├── train_ijepa.py       # standard visual-only I-JEPA pre-training loop
+│       ├── train_ijepa_text.py  # text-target cross-modal I-JEPA pre-training loop
 │       ├── eval_phase1.py       # non-overlapping same-page recall
 │       ├── eval_phase2.py       # scroll-based anchor/pos/neg recall
 │       │
@@ -126,7 +131,14 @@ visword-salad/
 │   ├── debug.yaml               # 500 samples, 1 epoch — for dry runs
 │   ├── baseline_cls.yaml        # DINOv2 + CLS head
 │   ├── salad_main.yaml          # DINOv2 + SALAD, 10k samples
-│   └── salad_20k.yaml           # same but 20k samples (high-RAM node only)
+│   ├── salad_20k.yaml           # same but 20k samples (high-RAM node only)
+│   ├── ijepa_pretrain_2blocks.yaml # standard I-JEPA (last 2 blocks trainable)
+│   ├── ijepa_pretrain_4blocks.yaml # standard I-JEPA (last 4 blocks trainable)
+│   ├── ijepa_pretrain_all_blocks.yaml # standard I-JEPA (all 32 blocks trainable)
+│   ├── ijepa_text_target.yaml   # text-target cross-modal I-JEPA (last 4 blocks trainable)
+│   ├── ijepa_text_target_all_blocks.yaml # text-target cross-modal I-JEPA (all 32 blocks trainable)
+│   ├── ijepa_pretrain_all_blocks_full_res.yaml  # standard I-JEPA, all blocks, 490×490 resolution
+│   └── ijepa_text_target_all_blocks_full_res.yaml # text-target I-JEPA, all blocks, 490×490 resolution
 │
 ├── scripts/
 │   ├── prefetch_data.py         # CLI wrapper for src/visword/data/prefetch.py
@@ -139,13 +151,18 @@ visword-salad/
 │   ├── prefetch.sbatch          # SLURM script: data download
 │   ├── train.sbatch             # SLURM script: training
 │   ├── eval.sbatch              # SLURM script: eval + interpret
+│   ├── ijepa_pretrain.sbatch    # SLURM script: visual I-JEPA pre-training
+│   ├── ijepa_text_target.sbatch # SLURM script: cross-modal I-JEPA pre-training
 │   └── interactive.sbatch       # salloc wrapper for debugging
 │
 ├── tests/
 │   ├── test_cropper.py          # unit tests for NonOverlappingCropper
 │   ├── test_losses.py
 │   ├── test_salad_bridge.py     # smoke test: import works, forward shape correct
-│   └── test_manifest.py
+│   ├── test_manifest.py
+│   ├── test_ijepa_pretrain.py   # tests for standard visual-only I-JEPA
+│   ├── test_ijepa_text_pretrain.py # tests for text-target cross-modal I-JEPA
+│   └── test_ijepa_text_adapter.py # tests for post-hoc text adapter mapping
 │
 ├── third_party/
 │   └── salad/                   # git clone, pinned commit, READ-ONLY
@@ -723,6 +740,35 @@ describes:
   multi-positive training, interpretability, BERT baseline. The notebook
   `VisWord_DINO_SALAD_v2.ipynb` is the reference — this spec is its
   productionised form.
+
+## 13.1 DDP multi-GPU training rules
+
+Both I-JEPA training scripts (`train_ijepa.py`, `train_ijepa_text.py`)
+use PyTorch `DistributedDataParallel` via `torchrun`. The following
+rules are hard-won from debugging sessions (see `CONTEXT.md` Session 5):
+
+1. **NCCL timeout must exceed eval time.** `dist.init_process_group()`
+   must set `timeout=datetime.timedelta(seconds=3600)` (1 hour). The
+   default (600s) is too short for full-resolution evaluation (~1000
+   images at 490×490 on T4).
+
+2. **Every rank-divergent code path needs a barrier.** If only rank 0
+   runs evaluation or checkpointing, *all ranks* must reach a
+   `torch.distributed.barrier()` after the divergent block. Otherwise
+   non-rank-0 processes will race ahead to `loss.backward()` (which is
+   an implicit DDP collective) and deadlock.
+
+3. **Dynamic torchrun master port.** Use
+   `MASTER_PORT=$((29000 + SLURM_JOB_ID % 1000))` in sbatch scripts
+   to avoid port collisions when multiple jobs land on the same node.
+
+4. **`interpolate_pos_encoding=True` everywhere.** All forward calls to
+   the I-JEPA encoder (training, EMA target, eval wrapper) must pass
+   this flag when using non-native resolutions (490×490 vs 224×224).
+
+5. **Gradient checkpointing required.** Full-resolution (1,225 patches)
+   ViT-H/14 does not fit in T4 VRAM without
+   `base_encoder.gradient_checkpointing_enable()`.
 
 ---
 

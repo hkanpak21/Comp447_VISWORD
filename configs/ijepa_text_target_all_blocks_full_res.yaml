@@ -1,0 +1,35 @@
+# I-JEPA ViT-H/14 text-target pre-training - ALL layers unfrozen at full resolution (490x490)
+experiment_name: ijepa-text-target-all-blocks-full-res
+model_kind: ijepa_text_target
+
+backbone:
+  arch: ijepa_vith14
+  feature_dim: 1280
+  num_trainable_blocks: 32  # Unfreeze all 32 layers of ViT-H
+
+cropper:
+  target_size: 490  # No downsampling (matches crop_size 490)
+
+data:
+  num_train_samples: 90000  # Utilizing the extended 100k training cache
+  num_eval_samples: 1000
+
+ijepa:
+  pred_depth: 6
+  pred_emb_dim: 384
+  num_enc_masks: 1
+  allow_overlap: false
+  min_keep: 10
+  text_source: text
+  max_text_tokens: 64
+
+train:
+  batch_size: 2  # Reduced batch size to prevent OOM at 490x490 resolution (1225 patches)
+  epochs: 3
+  lr_backbone: 2.0e-6  # Conservative learning rate to prevent representation collapse
+  lr_head: 5.0e-4
+  warmup_ratio: 0.1
+  weight_decay: 1.0e-4
+  grad_clip: 1.0
+  seed: 42
+  eval_every_steps: 1000  # Evaluated less frequently since train size is much larger

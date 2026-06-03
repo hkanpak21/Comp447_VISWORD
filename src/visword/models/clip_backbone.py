@@ -75,7 +75,10 @@ class CLIPImageBackbone(nn.Module):
         x = torch.cat([cls, x], dim=1)                  # (B, 1+H*W, C)
         x = x + v.positional_embedding.to(x.dtype)
         x = v.ln_pre(x)
-        x = x.permute(1, 0, 2)                          # open_clip uses (L, B, D)
+        
+        batch_first = getattr(v.transformer, "batch_first", False)
+        if not batch_first:
+            x = x.permute(1, 0, 2)                          # open_clip uses (L, B, D)
 
         n_blocks = len(v.transformer.resblocks)
         for i, blk in enumerate(v.transformer.resblocks):
@@ -85,7 +88,8 @@ class CLIPImageBackbone(nn.Module):
             else:
                 x = blk(x)
 
-        x = x.permute(1, 0, 2)                          # (B, 1+H*W, C)
+        if not batch_first:
+            x = x.permute(1, 0, 2)                          # (B, 1+H*W, C)
         x = v.ln_post(x)
         cls_token = x[:, 0]                             # (B, C)
         patches = x[:, 1:].permute(0, 2, 1).reshape(B, C, H, W)

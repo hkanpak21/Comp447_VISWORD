@@ -130,6 +130,9 @@ def _build_model(cfg: Config) -> torch.nn.Module:
     if cfg.model_kind == "frozen_adapter":
         from visword.models.frozen_adapter import FrozenBackboneAdapter
         return FrozenBackboneAdapter(cfg)
+    if cfg.model_kind == "ijepa_finetune":
+        from visword.models.ijepa_finetune import IJepaFinetune
+        return IJepaFinetune(cfg)
     if cfg.model_kind == "clip_salad":
         from visword.models.clip_salad import CLIPSALAD
         return CLIPSALAD(cfg)

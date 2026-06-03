@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-#SBATCH --job-name=vw-train
-#SBATCH --output=runs/_slurm/train_%j.out
-#SBATCH --error=runs/_slurm/train_%j.err
+#SBATCH --job-name=vw-ijepa-ft
+#SBATCH --output=runs/_slurm/ijepa_ft_%j.out
+#SBATCH --error=runs/_slurm/ijepa_ft_%j.err
 #SBATCH --partition=ai
 #SBATCH --qos=ai
 #SBATCH --account=ai
@@ -9,19 +9,16 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
-#SBATCH --mem=32G
-#SBATCH --time=07:55:00
+#SBATCH --mem=48G
+#SBATCH --time=04:00:00
 
 set -euo pipefail
 # shellcheck source=scripts/_env.sh
-source scripts/_env.sh
-
-# Pin the DINOv2 hub cache to the Py3.9-compatible commit (idempotent).
-python scripts/ensure_dinov2_hub.py || true
+source "$(dirname "${BASH_SOURCE[0]}")/../scripts/_env.sh"
 
 export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 HF_DATASETS_OFFLINE=1
 
-CONFIG="${CONFIG:-configs/salad_main.yaml}"
+CONFIG="${CONFIG:-configs/ijepa_ft_2blocks.yaml}"
 RUN_NAME="${RUN_NAME:-}"
 
 EXTRA_ARGS=()

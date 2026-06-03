@@ -239,30 +239,7 @@ def _rebuild_eval_dataset(cfg: Config, *, min_text_ratio: float = 0.05,
     return ds
 
 
-def _build_model_from_cfg(cfg: Config) -> torch.nn.Module:
-    if cfg.model_kind == "salad":
-        from visword.models.dinov2_salad import DINOv2SALAD
-        return DINOv2SALAD(cfg)
-    if cfg.model_kind == "linear_probe":
-        from visword.models.zeroshot import DINOv2LinearProbe
-        return DINOv2LinearProbe(cfg)
-    if cfg.model_kind == "clip_salad":
-        from visword.models.clip_salad import CLIPSALAD
-        return CLIPSALAD(cfg)
-    if cfg.model_kind == "clip_cls":
-        from visword.models.clip_salad import CLIPCLS
-        return CLIPCLS(cfg)
-    from visword.models.dinov2_cls import DINOv2CLS
-    return DINOv2CLS(cfg)
-
-
-def _load_checkpoint(model: torch.nn.Module, ckpt_path: Path, device: torch.device) -> dict:
-    blob = torch.load(ckpt_path, map_location=device)
-    state = blob.get("model_state_dict", blob)
-    model.load_state_dict(state)
-    model.to(device)
-    model.eval()
-    return blob
+from visword.eval_phase1 import _build_model_from_cfg, _load_checkpoint
 
 
 def run_protocol_a_cli(

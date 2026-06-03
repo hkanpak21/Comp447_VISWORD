@@ -91,23 +91,24 @@ add `train.py`, `eval_phase{1,2}.py`, `interpret/*.py`, etc.).
 
 ---
 
-## Current status — Phase A complete
+## Current status — Pre-training & Evaluation complete
 
-Per `AGENTS/PROJECT_SPEC.md §15` "Minimum viable delivery":
+The main pipeline (Phases A–E) has been fully implemented, and we have extended the scope to cover visual-only and text-target cross-modal I-JEPA pre-training across various parameter-efficiency scales:
 
-| Step | Deliverable | Status |
+| Step / Phase | Deliverable / Component | Status |
 |---|---|---|
-| 0 | Conda env at `/scratch/hkanpak21/conda_envs/visword` (clone of `he_ofl`, torch+torchvision restored after the documented ABI trap; +pydantic, pyyaml, huggingface_hub, datasets, pillow, matplotlib, pytest under `--constraint` torch pin) | ✓ |
-| 1 | Repo skeleton: `pyproject.toml`, `.gitignore`, `.python-version=3.9`, full directory tree | ✓ |
-| 2 | `scripts/vendor_salad.sh` ran → `third_party/salad/` @ `6aede13a` (serizba/salad HEAD on 2026-04-17) | ✓ |
-| 3 | `src/visword/models/salad_bridge.py` + `tests/test_salad_bridge.py` | A1 ✓ (3/3) |
-| 4 | `src/visword/data/manifest.py` + `tests/test_manifest.py` | A2 ✓ (3/3) |
-| 5 | `src/visword/data/cropper.py` + `tests/test_cropper.py` | A3 ✓ (3/3) |
-| 6 | `src/visword/{config,paths,seed}.py` + `scripts/resolve_config.py` + `configs/{default,debug}.yaml` + `tests/test_config.py` | A4 ✓ (2/2) |
-| 7 | `src/visword/data/prefetch.py` + `scripts/prefetch_data.py`. 5-row local sanity prefetch ran cleanly (PNG valid, fingerprint verified) | ✓ |
-| 8 | `slurm/{prefetch,train,eval}.sbatch` + `scripts/{_env.sh,submit.sh,summarise_run.py}`. SLURM smoke job submitted: `scripts/submit.sh prefetch 50` | A5 in flight |
+| Phase A | Data pipeline, skeleton, SALAD bridge, NonOverlappingCropper, and tests | ✓ |
+| Phase B | Model wrappers, batch statistics, InfoNCE / Multi-Similarity losses, and tests | ✓ |
+| Phase C | End-to-end training loops (`train.py`), resolved configurations, and integration tests | ✓ |
+| Phase D | Evaluation scripts (`eval_phase1.py` and `eval_phase2.py`) with metrics output | ✓ |
+| Phase E | Interpretability suite (attention maps, cluster visualisations, CLS-vs-VLAD decomposition) | ✓ |
+| Phase F | I-JEPA visual-only & text-target cross-modal pre-training loops, config sweeps (2-blocks, 4-blocks, all-blocks), and tests | ✓ |
 
-**Local pytest:** `pytest -q` → **11 passed in ~8 s** (CPU only; SALAD bridge forward shape verified on a 768×16×16 dummy tensor).
+**Key Pre-training Runs Completed:**
+*   `ijepa-pretrain-2blocks` / `ijepa-pretrain-4blocks` / `ijepa-pretrain-all-blocks`
+*   `ijepa-text-target-4blocks` / `ijepa-text-target-all-blocks`
+
+**Local Pytest Status:** All unit and integration tests (including standard I-JEPA, text-target I-JEPA, and text adapters) pass successfully on CPU and GPU devices.
 
 ### Spec amendments adopted (operator-confirmed)
 

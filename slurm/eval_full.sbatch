@@ -23,9 +23,17 @@
 # Or: RUN_DIR=latest (defaults to most recent run dir)
 
 set -euo pipefail
-source "$(dirname "${BASH_SOURCE[0]}")/../scripts/_env.sh"
+if [ -n "${SLURM_SUBMIT_DIR:-}" ]; then
+    source "${SLURM_SUBMIT_DIR}/scripts/_env.sh"
+else
+    source "$(dirname "${BASH_SOURCE[0]}")/../scripts/_env.sh"
+fi
 
-python "$(dirname "${BASH_SOURCE[0]}")/../scripts/ensure_dinov2_hub.py" || true
+if [ -n "${SLURM_SUBMIT_DIR:-}" ]; then
+    python "${SLURM_SUBMIT_DIR}/scripts/ensure_dinov2_hub.py" || true
+else
+    python "$(dirname "${BASH_SOURCE[0]}")/../scripts/ensure_dinov2_hub.py" || true
+fi
 
 export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 HF_DATASETS_OFFLINE=1
 
@@ -58,4 +66,8 @@ python -u -m visword.eval_phase2_titleblanked --run-dir "$RUN_DIR" --checkpoint 
 # Interpret (DINOv2 family only; CLIP variants are gated inside the module).
 python -u -m visword.interpret --run-dir "$RUN_DIR" --checkpoint "$CHECKPOINT" --k 4 || true
 
-python "$(dirname "${BASH_SOURCE[0]}")/../scripts/"summarise_run.py "$RUN_DIR" || true
+if [ -n "${SLURM_SUBMIT_DIR:-}" ]; then
+    python "${SLURM_SUBMIT_DIR}/scripts/summarise_run.py" "$RUN_DIR" || true
+else
+    python "$(dirname "${BASH_SOURCE[0]}")/../scripts/summarise_run.py" "$RUN_DIR" || true
+fi

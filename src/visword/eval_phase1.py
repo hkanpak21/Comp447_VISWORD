@@ -206,6 +206,9 @@ def _build_model_from_cfg(cfg: Config) -> torch.nn.Module:
     if cfg.model_kind == "clip_cls":
         from visword.models.clip_salad import CLIPCLS
         return CLIPCLS(cfg)
+    if cfg.model_kind in ("ijepa_pretrain", "ijepa_text_target"):
+        from visword.models.zeroshot import ZeroShotIJepa
+        return ZeroShotIJepa(cfg)
     from visword.models.dinov2_cls import DINOv2CLS
     return DINOv2CLS(cfg)
 
@@ -213,8 +216,17 @@ def _build_model_from_cfg(cfg: Config) -> torch.nn.Module:
 def _load_checkpoint(model: torch.nn.Module, ckpt_path: Path, device: torch.device) -> dict:
     """Load model state_dict from a train.py-style checkpoint."""
     blob = torch.load(ckpt_path, map_location=device)
-    state = blob.get("model_state_dict", blob)
-    model.load_state_dict(state)
+    if "encoder" in blob:
+        state = blob["encoder"]
+        state = {k.replace("module.", ""): v for k, v in state.items()}
+        if hasattr(model, "model") and not any(k.startswith("model.") for k in state.keys()):
+            model.model.load_state_dict(state)
+        else:
+            model.load_state_dict(state)
+    else:
+        state = blob.get("model_state_dict", blob)
+        state = {k.replace("module.", ""): v for k, v in state.items()}
+        model.load_state_dict(state)
     model.to(device)
     model.eval()
     return blob

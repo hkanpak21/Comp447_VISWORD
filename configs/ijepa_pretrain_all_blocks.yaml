@@ -1,0 +1,31 @@
+# I-JEPA ViT-H/14 self-supervised pre-training - ALL layers unfrozen
+experiment_name: ijepa-pretrain-all-blocks
+model_kind: ijepa_pretrain
+
+backbone:
+  arch: ijepa_vith14
+  feature_dim: 1280
+  num_trainable_blocks: 32  # Unfreeze all 32 layers of ViT-H
+
+data:
+  num_train_samples: 4000
+  num_eval_samples: 1000
+
+ijepa:
+  pred_depth: 6
+  pred_emb_dim: 384
+  num_enc_masks: 1
+  num_pred_masks: 4
+  allow_overlap: false
+  min_keep: 10
+
+train:
+  batch_size: 8
+  epochs: 3
+  lr_backbone: 2.0e-6  # Conservative learning rate to prevent representation collapse
+  lr_head: 5.0e-4
+  warmup_ratio: 0.1
+  weight_decay: 1.0e-4
+  grad_clip: 1.0
+  seed: 42
+  eval_every_steps: 100

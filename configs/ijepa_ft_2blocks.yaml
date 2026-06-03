@@ -1,0 +1,26 @@
+# I-JEPA ViT-H/14 partial fine-tune — last 2 of 32 blocks unfrozen
+# Conservative start: ~39M trainable params + MLP head
+# Baseline (frozen + linear adapter): P1 R@10 = 0.180
+experiment_name: ijepa-ft-2blocks
+model_kind: ijepa_finetune
+
+backbone:
+  arch: ijepa_vith14
+  feature_dim: 1280
+  num_trainable_blocks: 2
+
+data:
+  num_train_samples: 4000
+  num_eval_samples: 1000
+
+train:
+  loss: multisim
+  batch_size: 8
+  epochs: 3
+  lr_backbone: 1.0e-5
+  lr_head: 5.0e-4
+  warmup_ratio: 0.1
+  weight_decay: 1.0e-4
+  grad_clip: 1.0
+  seed: 42
+  eval_every_steps: 100

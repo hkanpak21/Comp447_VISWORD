@@ -13,18 +13,18 @@
 
 set -euo pipefail
 # shellcheck source=scripts/_env.sh
-source "$(dirname "${BASH_SOURCE[0]}")/../scripts/_env.sh"
+source scripts/_env.sh
 
 TARGET_ROWS="${TARGET_ROWS:-21000}"
 
-python -u "$(dirname "${BASH_SOURCE[0]}")/../scripts/"prefetch_data.py \
+python -u scripts/prefetch_data.py \
     --data-dir "$DATA_DIR" \
     --dataset wiki-ss \
     --target-rows "$TARGET_ROWS" \
     --resume
 
 # Also pull the anchors dataset (tiny — ~30 MB).
-python -u "$(dirname "${BASH_SOURCE[0]}")/../scripts/"prefetch_data.py \
+python -u scripts/prefetch_data.py \
     --data-dir "$DATA_DIR" \
     --dataset wiki-ss-anchors \
     --resume

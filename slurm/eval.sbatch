@@ -14,7 +14,7 @@
 
 set -euo pipefail
 # shellcheck source=scripts/_env.sh
-source "$(dirname "${BASH_SOURCE[0]}")/../scripts/_env.sh"
+source scripts/_env.sh
 
 # Safety: the DINOv2 hub cache needs to be pinned at a Py3.9-compatible
 # commit (e1277af), otherwise model-building crashes with "float | None"

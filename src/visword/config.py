@@ -72,6 +72,21 @@ class EvalConfig(_Strict):
     phase2_max_queries: int = 200
 
 
+class IJepaConfig(_Strict):
+    pred_depth: int = 6
+    pred_emb_dim: int = 384
+    ema: list[float] = Field(default_factory=lambda: [0.996, 1.0])
+    num_enc_masks: int = 1
+    num_pred_masks: int = 4
+    enc_mask_scale: tuple[float, float] = (0.85, 1.0)
+    pred_mask_scale: tuple[float, float] = (0.15, 0.2)
+    aspect_ratio: tuple[float, float] = (0.75, 1.5)
+    allow_overlap: bool = False
+    min_keep: int = 10
+    text_source: Literal["title", "text"] = "title"
+    max_text_tokens: int = 64
+
+
 class Config(_Strict):
     experiment_name: str
     model_kind: Literal[
@@ -79,6 +94,9 @@ class Config(_Strict):
         "linear_probe",
         "clip_cls", "clip_salad",
         "frozen_adapter",
+        "ijepa_finetune",
+        "ijepa_pretrain",
+        "ijepa_text_target",
         "zeroshot_dinov2_cls", "zeroshot_dinov2_mean",
         "zeroshot_clip_image", "zeroshot_imagenet_vit",
     ] = "salad"
@@ -87,6 +105,7 @@ class Config(_Strict):
     backbone: BackboneConfig = Field(default_factory=BackboneConfig)
     salad: SaladConfig = Field(default_factory=SaladConfig)
     adapter: AdapterConfig = Field(default_factory=AdapterConfig)
+    ijepa: IJepaConfig = Field(default_factory=IJepaConfig)
     train: TrainConfig = Field(default_factory=TrainConfig)
     eval: EvalConfig = Field(default_factory=EvalConfig)
 
