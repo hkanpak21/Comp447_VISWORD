@@ -30,4 +30,5 @@ PYTHONPATH=src python scripts/rebaseline_grid.py \
     --out "$OUT" \
     --num-eval 2000 \
     --num-pages "${NUM_PAGES:-2000}" \
-    --batch-size "${BATCH_SIZE:-64}"
+    --batch-size "${BATCH_SIZE:-64}" \
+    --blank-top-frac "${BLANK_TOP_FRAC:-0.0}"

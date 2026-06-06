@@ -57,8 +57,18 @@ def default_cfg(root: Path) -> Config:
     return Config.model_validate(raw)
 
 
+def _blank_top(page: Image.Image, frac: float) -> Image.Image:
+    """Paint the top ``frac`` of the page white (the title/header region) — the
+    layout-fingerprint confound check: does retrieval survive without the title?"""
+    if frac <= 0:
+        return page
+    arr = np.asarray(page).copy()
+    arr[: int(round(arr.shape[0] * frac)), :, :] = 255
+    return Image.fromarray(arr)
+
+
 @torch.no_grad()
-def encode_slice(encoder, cache_dir, rows, eval_idx, cropper, device, batch_size):
+def encode_slice(encoder, cache_dir, rows, eval_idx, cropper, device, batch_size, blank_top=0.0):
     """Return (embeddings (N,D) cpu, page_ids (N,) cpu, n_crops, seconds)."""
     embs, page_ids = [], []
     buf, buf_pid = [], []
@@ -75,7 +85,7 @@ def encode_slice(encoder, cache_dir, rows, eval_idx, cropper, device, batch_size
 
     for local, gi in enumerate(eval_idx):
         with Image.open(cache_dir / rows[int(gi)]["image_path"]) as im:
-            crops = cropper(im.convert("RGB"))
+            crops = cropper(_blank_top(im.convert("RGB"), blank_top))
         for c in crops:
             buf.append(_IMAGENET(c))
             buf_pid.append(local)
@@ -98,6 +108,8 @@ def main() -> int:
     ap.add_argument("--min-text-ratio", type=float, default=0.05)
     ap.add_argument("--batch-size", type=int, default=64)
     ap.add_argument("--k-values", nargs="*", type=int, default=[1, 5, 10, 20])
+    ap.add_argument("--blank-top-frac", type=float, default=0.0,
+                    help="paint the top fraction of each page white (title-blanking confound check)")
     args = ap.parse_args()
 
     root = Path(__file__).resolve().parents[1]
@@ -131,10 +143,12 @@ def main() -> int:
         enc = build_encoder(name, cfg).to(device).eval()
         n_params = int(sum(p.numel() for p in enc.parameters()))
         E, pid, n_crops, secs = encode_slice(
-            enc, args.cache_dir, rows, eval_idx, cropper, device, args.batch_size)
+            enc, args.cache_dir, rows, eval_idx, cropper, device, args.batch_size,
+            blank_top=args.blank_top_frac)
         rec = page_reid_recall(E, pid, k_values=tuple(args.k_values))
         row = {
             "encoder": name, "descriptor_dim": int(enc.descriptor_dim),
+            "blank_top_frac": args.blank_top_frac,
             "total_params": n_params, "trainable_params": 0,
             "num_pages": int(len(eval_idx)), "num_crops": n_crops,
             "crops_per_sec": round(n_crops / secs, 1) if secs else None,
