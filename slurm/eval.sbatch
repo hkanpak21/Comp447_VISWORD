@@ -19,7 +19,7 @@ source scripts/_env.sh
 # Safety: the DINOv2 hub cache needs to be pinned at a Py3.9-compatible
 # commit (e1277af), otherwise model-building crashes with "float | None"
 # PEP 604 errors on our env. Re-runs idempotent.
-python "$(dirname "${BASH_SOURCE[0]}")/../scripts/ensure_dinov2_hub.py" || true
+python "$PROJECT_ROOT/scripts/ensure_dinov2_hub.py" || true
 
 export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 HF_DATASETS_OFFLINE=1
 
@@ -43,4 +43,4 @@ python -u -m visword.eval_phase2 --run-dir "$RUN_DIR" --checkpoint "$CHECKPOINT"
 python -u -m visword.interpret   --run-dir "$RUN_DIR" --checkpoint "$CHECKPOINT" --k 4
 
 # Print a human summary at the end so `sacct -o stdout` is useful.
-python "$(dirname "${BASH_SOURCE[0]}")/../scripts/"summarise_run.py "$RUN_DIR"
+python "$PROJECT_ROOT/scripts/summarise_run.py" "$RUN_DIR"

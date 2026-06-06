@@ -10,7 +10,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
-#SBATCH --time=07:55:00
+#SBATCH --time=48:00:00
 
 set -euo pipefail
 # shellcheck source=scripts/_env.sh
@@ -29,5 +29,5 @@ if [ -n "$RUN_NAME" ]; then
     EXTRA_ARGS+=(--run-name "$RUN_NAME")
 fi
 
-cd "$(dirname "${BASH_SOURCE[0]}")/.."
+cd "$PROJECT_ROOT"
 PYTHONPATH=src python -u -m visword.train --config "$CONFIG" "${EXTRA_ARGS[@]}" "$@"

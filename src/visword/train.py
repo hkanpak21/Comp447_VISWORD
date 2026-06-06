@@ -133,6 +133,9 @@ def _build_model(cfg: Config) -> torch.nn.Module:
     if cfg.model_kind == "ijepa_finetune":
         from visword.models.ijepa_finetune import IJepaFinetune
         return IJepaFinetune(cfg)
+    if cfg.model_kind == "ijepa_salad":
+        from visword.models.ijepa_salad import IJepaSALAD
+        return IJepaSALAD(cfg)
     if cfg.model_kind == "clip_salad":
         from visword.models.clip_salad import CLIPSALAD
         return CLIPSALAD(cfg)

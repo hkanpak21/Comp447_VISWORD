@@ -581,6 +581,37 @@ def prefetch_anchors(cache_dir: Path) -> dict[str, Any]:
     return summary
 
 
+def prefetch_docvqa_2026(cache_dir: Path) -> dict[str, Any]:
+    """Snapshot the DocVQA-2026 repo."""
+    from huggingface_hub import snapshot_download
+
+    cache_dir = Path(cache_dir)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    started = time.time()
+    snap_path = snapshot_download(
+        repo_id="VLR-CVC/DocVQA-2026",
+        repo_type="dataset",
+    )
+    snap = Path(snap_path)
+    for entry in snap.iterdir():
+        target = cache_dir / entry.name
+        if target.exists() and not entry.is_dir():
+            continue
+        if entry.is_dir():
+            shutil.copytree(entry, target, dirs_exist_ok=True)
+        else:
+            shutil.copy2(entry, target)
+    elapsed = time.time() - started
+    summary = {
+        "snapshot_source": str(snap),
+        "cache_dir": str(cache_dir),
+        "elapsed_seconds": round(elapsed, 2),
+        "status": "complete",
+    }
+    logger.info("DocVQA-2026 snapshot OK — %s", summary)
+    return summary
+
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
@@ -588,7 +619,7 @@ def prefetch_anchors(cache_dir: Path) -> dict[str, Any]:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Prefetch VisWord datasets to the local cache.")
     p.add_argument("--data-dir", required=True, type=Path)
-    p.add_argument("--dataset", required=True, choices=["wiki-ss", "wiki-ss-anchors"])
+    p.add_argument("--dataset", required=True, choices=["wiki-ss", "wiki-ss-anchors", "docvqa-2026"])
     p.add_argument("--target-rows", type=int, default=21000,
                    help="Only used for --dataset wiki-ss in non-shard mode.")
     p.add_argument("--resume", action="store_true", default=True)
@@ -622,7 +653,7 @@ def main(argv: list[str] | None = None) -> int:
     _ensure_logger()
     args = build_parser().parse_args(argv)
 
-    sub_dir_name = {"wiki-ss": "wiki_ss", "wiki-ss-anchors": "wiki_ss_anchors"}[args.dataset]
+    sub_dir_name = {"wiki-ss": "wiki_ss", "wiki-ss-anchors": "wiki_ss_anchors", "docvqa-2026": "docvqa_2026"}[args.dataset]
     cache_dir = args.data_dir / sub_dir_name
 
     if args.dataset == "wiki-ss":
@@ -669,6 +700,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.dataset == "wiki-ss-anchors":
         prefetch_anchors(cache_dir)
+        return 0
+
+    if args.dataset == "docvqa-2026":
+        prefetch_docvqa_2026(cache_dir)
         return 0
 
     return 2  # unreachable

@@ -53,24 +53,32 @@ def _load_eval_pages(cache_dir: Path, num_pages: int, seed: int) -> list[dict]:
 def _crop_pages_to_pil(rows: list[dict], cache_dir: Path,
                        cropper: NonOverlappingCropper,
                        blank_page_top_frac: float = 0.0,
+                       blank_page_right_frac: float = 0.0,
                        ) -> tuple[list[Image.Image], np.ndarray]:
     """For each page row, generate non-overlapping crops with
     min_text_ratio filter. If ``blank_page_top_frac > 0``, paint the top
-    fraction of each *page* white before cropping; this is the H-OCR
-    ablation. Returns ``(pil_crops, page_ids)``."""
+    fraction of each *page* white before cropping. If ``blank_page_right_frac > 0``,
+    paint the right fraction of each *page* white before cropping.
+    Returns ``(pil_crops, page_ids)``."""
     pils: list[Image.Image] = []
     page_ids: list[int] = []
     for local_idx, row in enumerate(rows):
         path = cache_dir / row["image_path"]
         with Image.open(path) as im:
             im = im.convert("RGB")
-            if blank_page_top_frac > 0.0:
+            if blank_page_top_frac > 0.0 or blank_page_right_frac > 0.0:
+                im = im.copy()
                 w, h = im.size
-                cutoff = int(round(h * blank_page_top_frac))
-                if cutoff > 0:
-                    im = im.copy()
-                    ImageDraw.Draw(im).rectangle(
-                        (0, 0, w, cutoff), fill=(255, 255, 255))
+                if blank_page_top_frac > 0.0:
+                    cutoff_h = int(round(h * blank_page_top_frac))
+                    if cutoff_h > 0:
+                        ImageDraw.Draw(im).rectangle(
+                            (0, 0, w, cutoff_h), fill=(255, 255, 255))
+                if blank_page_right_frac > 0.0:
+                    cutoff_w = int(round(w * blank_page_right_frac))
+                    if cutoff_w > 0:
+                        ImageDraw.Draw(im).rectangle(
+                            (w - cutoff_w, 0, w, h), fill=(255, 255, 255))
             crops = cropper.crop(im)
         for c in crops:
             # cropper returns PIL, target_size already applied.
@@ -95,6 +103,9 @@ def main() -> int:
     p.add_argument("--blank-page-top-frac", type=float, default=0.0,
                    help="If >0, paint the top fraction of every page "
                         "white BEFORE cropping. The H-OCR ablation.")
+    p.add_argument("--blank-page-right-frac", type=float, default=0.0,
+                   help="If >0, paint the right fraction of every page "
+                        "white BEFORE cropping. Layout ablation.")
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--save-descriptors", type=Path, default=None,
                    help="if set, also dump (emb, page_ids) as .npz so "
@@ -117,6 +128,7 @@ def main() -> int:
     pil_crops, page_ids = _crop_pages_to_pil(
         rows, args.cache_dir, cropper,
         blank_page_top_frac=args.blank_page_top_frac,
+        blank_page_right_frac=args.blank_page_right_frac,
     )
     print(f"  -> {len(pil_crops)} crops from {len(rows)} pages "
           f"(mean {len(pil_crops)/len(rows):.1f} crops/page) in {time.time()-t0:.1f}s",
@@ -165,6 +177,7 @@ def main() -> int:
         "num_queries_eligible": result["num_queries_eligible"],
         "min_text_ratio_for_query": args.min_text_ratio,
         "blank_page_top_frac": args.blank_page_top_frac,
+        "blank_page_right_frac": args.blank_page_right_frac,
         "recall": result["recall"],
         "sanity": result["sanity"],
         "seed": args.seed,

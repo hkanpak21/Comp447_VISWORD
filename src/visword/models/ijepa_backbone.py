@@ -33,7 +33,7 @@ class IJepaBackbone(nn.Module):
     TOTAL_BLOCKS = 32
     HIDDEN_DIM = 1280
 
-    def __init__(self, num_trainable_blocks: int = 2) -> None:
+    def __init__(self, num_trainable_blocks: int = 2, pretrained_checkpoint: str | None = None) -> None:
         super().__init__()
 
         # DNS shim must be installed before any HuggingFace import on Valar.
@@ -42,6 +42,25 @@ class IJepaBackbone(nn.Module):
         from transformers import AutoModel
 
         self.model = AutoModel.from_pretrained("facebook/ijepa_vith14_1k")
+
+        if pretrained_checkpoint is not None:
+            ckpt = torch.load(pretrained_checkpoint, map_location="cpu", weights_only=True)
+            if "encoder" in ckpt:
+                state_dict = ckpt["encoder"]
+            elif "model_state_dict" in ckpt:
+                state_dict = ckpt["model_state_dict"]
+            else:
+                state_dict = ckpt
+            
+            # The checkpoint from ijepa_text_target might have 'model.' prefix
+            new_state_dict = {}
+            for k, v in state_dict.items():
+                if k.startswith("model."):
+                    new_state_dict[k[6:]] = v
+                else:
+                    new_state_dict[k] = v
+            self.model.load_state_dict(new_state_dict, strict=False)
+
         self.num_trainable_blocks = num_trainable_blocks
         self._freeze(num_trainable_blocks)
 

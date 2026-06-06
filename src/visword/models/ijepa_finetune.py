@@ -39,6 +39,7 @@ class IJepaFinetune(nn.Module):
 
         self.backbone = IJepaBackbone(
             num_trainable_blocks=cfg.backbone.num_trainable_blocks,
+            pretrained_checkpoint=getattr(cfg.backbone, "pretrained_checkpoint", None)
         )
 
         d_in = cfg.backbone.feature_dim   # 1280

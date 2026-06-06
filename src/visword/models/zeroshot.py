@@ -300,7 +300,7 @@ class ZeroShotIJepa(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # I-JEPA returns BaseModelOutput; pool patch tokens (no CLS).
         with torch.no_grad():
-            out = self.model(pixel_values=x)
+            out = self.model(pixel_values=x, interpolate_pos_encoding=True)
             # last_hidden_state: (B, num_patches, hidden_size). Mean-pool.
             feats = out.last_hidden_state.mean(dim=1).float()
         return F.normalize(feats, p=2, dim=-1)

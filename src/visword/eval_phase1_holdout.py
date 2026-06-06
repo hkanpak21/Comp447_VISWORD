@@ -185,13 +185,14 @@ def _load_cfg(run_dir: Path) -> Config:
 
 
 def _rebuild_eval_dataset(cfg: Config, *, min_text_ratio: float = 0.05,
-                          blank_page_top_frac: float = 0.0) -> LightWikiScreenshotDataset:
+                          blank_page_top_frac: float = 0.0,
+                          blank_page_right_frac: float = 0.0) -> LightWikiScreenshotDataset:
     """Same eval split as ``eval_phase1`` but with the in-distribution
     ``min_text_ratio`` filter so blank crops aren't queried.
 
-    If ``blank_page_top_frac > 0`` the loader paints the top fraction
-    of every page white before cropping; this is the trained-model
-    H-OCR ablation."""
+    If ``blank_page_top_frac > 0`` or ``blank_page_right_frac > 0`` the loader 
+    paints the corresponding fraction of every page white before cropping; 
+    this is the trained-model layout ablation."""
     cache_dir = Path(cfg.data.wiki_ss_cache_dir)
     manifest = M.read_manifest(cache_dir)
     num_rows = manifest["num_rows"]
@@ -220,7 +221,7 @@ def _rebuild_eval_dataset(cfg: Config, *, min_text_ratio: float = 0.05,
     # If requested, monkey-patch the dataset's image-loader to blank the
     # top of each page before cropping. This avoids touching
     # LightWikiScreenshotDataset internals.
-    if blank_page_top_frac > 0.0:
+    if blank_page_top_frac > 0.0 or blank_page_right_frac > 0.0:
         from PIL import Image, ImageDraw
 
         def _load_with_blanking(row_idx: int):
@@ -228,12 +229,18 @@ def _rebuild_eval_dataset(cfg: Config, *, min_text_ratio: float = 0.05,
             with Image.open(cache_dir / row["image_path"]) as im:
                 im = im.convert("RGB")
                 im.load()
+                im = im.copy()
                 w, h = im.size
-                cutoff = int(round(h * blank_page_top_frac))
-                if cutoff > 0:
-                    im = im.copy()
-                    ImageDraw.Draw(im).rectangle(
-                        (0, 0, w, cutoff), fill=(255, 255, 255))
+                if blank_page_top_frac > 0.0:
+                    cutoff_h = int(round(h * blank_page_top_frac))
+                    if cutoff_h > 0:
+                        ImageDraw.Draw(im).rectangle(
+                            (0, 0, w, cutoff_h), fill=(255, 255, 255))
+                if blank_page_right_frac > 0.0:
+                    cutoff_w = int(round(w * blank_page_right_frac))
+                    if cutoff_w > 0:
+                        ImageDraw.Draw(im).rectangle(
+                            (w - cutoff_w, 0, w, h), fill=(255, 255, 255))
                 return ds.cropper(im)
         ds._load_and_crop = _load_with_blanking  # type: ignore[attr-defined]
     return ds
@@ -245,6 +252,7 @@ from visword.eval_phase1 import _build_model_from_cfg, _load_checkpoint
 def run_protocol_a_cli(
     run_dir: Path, *, checkpoint: str = "best_phase1.pt",
     blank_page_top_frac: float = 0.0,
+    blank_page_right_frac: float = 0.0,
     min_text_ratio: float = 0.05,
     save_descriptors: Path | None = None,
 ) -> dict:
@@ -256,7 +264,8 @@ def run_protocol_a_cli(
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     eval_ds = _rebuild_eval_dataset(cfg, min_text_ratio=min_text_ratio,
-                                     blank_page_top_frac=blank_page_top_frac)
+                                     blank_page_top_frac=blank_page_top_frac,
+                                     blank_page_right_frac=blank_page_right_frac)
     model = _build_model_from_cfg(cfg)
     blob = _load_checkpoint(model, ckpt_path, device)
 
@@ -279,11 +288,14 @@ def run_protocol_a_cli(
         "sanity": result["sanity"],
         "min_text_ratio_for_query": 0.05,
         "blank_page_top_frac": blank_page_top_frac,
+        "blank_page_right_frac": blank_page_right_frac,
     }
+    suffix_parts = []
     if blank_page_top_frac > 0.0:
-        suffix = f"_blank{int(blank_page_top_frac * 100):02d}"
-    else:
-        suffix = ""
+        suffix_parts.append(f"_blanktop{int(blank_page_top_frac * 100):02d}")
+    if blank_page_right_frac > 0.0:
+        suffix_parts.append(f"_blankright{int(blank_page_right_frac * 100):02d}")
+    suffix = "".join(suffix_parts)
     out_path = run_dir / f"phase1_holdout{suffix}.json"
     out_path.write_text(json.dumps(payload, indent=2))
     return payload
@@ -297,6 +309,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--blank-page-top-frac", type=float, default=0.0,
                    help="If >0, paint the top fraction of every page "
                         "white before cropping (H-OCR ablation).")
+    p.add_argument("--blank-page-right-frac", type=float, default=0.0,
+                   help="If >0, paint the right fraction of every page "
+                        "white before cropping (Layout ablation).")
     p.add_argument("--min-text-ratio", type=float, default=0.05,
                    help="Cropper filter; lower to keep all grid cells "
                         "(needed for matched orig/blank descriptor pairs "
@@ -307,6 +322,7 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
     payload = run_protocol_a_cli(args.run_dir, checkpoint=args.checkpoint,
                                  blank_page_top_frac=args.blank_page_top_frac,
+                                 blank_page_right_frac=args.blank_page_right_frac,
                                  min_text_ratio=args.min_text_ratio,
                                  save_descriptors=args.save_descriptors)
     print(json.dumps(payload, indent=2))

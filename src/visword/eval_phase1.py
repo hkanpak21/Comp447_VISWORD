@@ -209,6 +209,12 @@ def _build_model_from_cfg(cfg: Config) -> torch.nn.Module:
     if cfg.model_kind in ("ijepa_pretrain", "ijepa_text_target"):
         from visword.models.zeroshot import ZeroShotIJepa
         return ZeroShotIJepa(cfg)
+    if cfg.model_kind == "ijepa_finetune":
+        from visword.models.ijepa_finetune import IJepaFinetune
+        return IJepaFinetune(cfg)
+    if cfg.model_kind == "ijepa_salad":
+        from visword.models.ijepa_salad import IJepaSALAD
+        return IJepaSALAD(cfg)
     from visword.models.dinov2_cls import DINOv2CLS
     return DINOv2CLS(cfg)
 

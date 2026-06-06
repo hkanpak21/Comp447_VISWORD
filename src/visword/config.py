@@ -8,7 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -35,6 +35,7 @@ class BackboneConfig(_Strict):
     arch: Literal["dinov2_vitb14", "dinov2_vits14", "clip_vitb16", "ijepa_vith14"] = "dinov2_vitb14"
     num_trainable_blocks: int = 4
     feature_dim: int = 768
+    pretrained_checkpoint: Optional[str] = None
 
 
 class AdapterConfig(_Strict):
@@ -94,7 +95,7 @@ class Config(_Strict):
         "linear_probe",
         "clip_cls", "clip_salad",
         "frozen_adapter",
-        "ijepa_finetune",
+        "ijepa_finetune", "ijepa_salad",
         "ijepa_pretrain",
         "ijepa_text_target",
         "zeroshot_dinov2_cls", "zeroshot_dinov2_mean",
