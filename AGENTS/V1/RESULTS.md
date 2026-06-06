@@ -113,6 +113,17 @@ Setup: fine-tune `facebook/vit-mae-base` last-4 blocks + projection head (28.9M 
 | 2026-06-07 | **MAE reader (after)** | 2000 pages | 0.005 | 0.022 | **0.039** | 0.071 | 0.010 |
 | 2026-06-07 | MAE reader (after) | 300 pages (periodic) | 0.029 | 0.101 | **0.169** | 0.277 | — |
 
-**Finding (honest):** the reader trains cleanly (loss→3e-4) and clearly learns *some* page structure — on a **300-page** gallery R@10 jumps to **0.169** — but on the **2000-page** gallery it is only **0.039** (vs frozen 0.036), with a near-collapsed space (sim-gap 0.010). The large 300-vs-2000 gap is the gallery-size sensitivity of a weakly-separated embedding. **Hypothesis:** the **BERT[CLS]-of-body target is itself weakly discriminative** across Wikipedia pages (CLS pooling is weak; bodies share encyclopedic style) → the reader inherits the target's weak separability. The perfect-text bound (ticket 05, below) tests this directly under CLS vs mean-pool. If confirmed, the fix is a stronger text target (mean-pooled BERT) or a contrastive objective — a follow-up for the operator (objective was chosen = CLS-regression, matching Barış).
+**Finding (honest):** the reader trains cleanly (loss→3e-4) and clearly learns *some* page structure — on a **300-page** gallery R@10 jumps to **0.169** — but on the **2000-page** gallery it is only **0.039** (vs frozen 0.036), with a near-collapsed space (sim-gap 0.010). The large 300-vs-2000 gap is the gallery-size sensitivity of a weakly-separated embedding. **Hypothesis (now REFUTED — see ticket 05):** I first suspected the BERT[CLS]-of-body target was weakly discriminative. Ticket 05 disproves it — the **CLS-body target re-ids at R@10 0.747** (mean-pool 0.938). So the target is fine; the reader's failure is **regression-collapse**: Smooth-L1 is minimized (3e-4) by predicting the *tight target centroid* (capturing average proximity, not the fine per-page structure retrieval needs — reader sim-gap 0.010 vs the target's 0.176). The genuine fix is a **contrastive objective** (declined earlier in favour of CLS-regression to match Barış) — strong evidence to reconsider; operator's call. Re-running was NOT done autonomously (objective was the operator's explicit choice).
+
+### Ticket 05 — perfect-text upper bound (ground-truth text → BERT → page-level retrieval)
+
+Run-dir `VISWORD_v1/runs/perfect_text_v1` · git `e0fa001` · job 1145304 (T4, 3.4min). Same seed-42 2000-page slice; body split into 4 chunks (8000 chunk-views) → same `page_reid` LOO protocol as the visual grid; title→body = cross-field recall. Reports both the reader's-target readout (BERT[CLS]) and the stronger mean-pool.
+
+| date | readout | body re-id R@10 (chunk→page LOO) | body sim-gap | title→body R@10 |
+|---|---|---|---|---|
+| 2026-06-06 | BERT[CLS] (= reader target) | 0.747 | 0.176 | 0.054 |
+| 2026-06-06 | BERT mean-pool | **0.938 ★** | 0.198 | 0.571 |
+
+**Finding:** text is **highly discriminative** — perfect-text body-re-id ceiling = **0.94 (mean-pool) / 0.75 (CLS)**. Two consequences: (1) the visual **CLIP (0.736) already sits at the CLS-text level (0.747)**, with clear headroom to the mean-pool ceiling — i.e. better *reading* (not just layout) is what would close the gap; (2) the MAE reader's 0.039 is far below its own target's 0.747 ceiling → confirms regression-collapse, not a weak target.
 
 _(append: one row per measurement; never overwrite a prior row)_
