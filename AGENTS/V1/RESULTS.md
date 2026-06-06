@@ -88,4 +88,19 @@ Protocol: **page-level same-page re-identification**, crop query → per-page me
 
 **Finding:** the family ordering survives legibility — image-text contrastive (CLIP/SigLIP) read; image-only SSL (DINOv2, I-JEPA, MAE), supervised, and random sit near the floor. MAE (pixel-reconstruction SSL) lands at the very bottom (≈random), a near-collapsed feature space (sim-gap ≈0) — the non-reader baseline our MAE reader must lift.
 
+#### Title-blanking confound check (top-25% blanked, same protocol/slice) — run-dir `rebaseline_grid_blank25_v1`, git `9cead57`, job 1144522
+
+| date | slice | encoder | metric | R@10 (unblanked) | R@10 (top-25% blanked) | Δ | git SHA |
+|---|---|---|---|---|---|---|---|
+| 2026-06-06 | 02 | CLIP ViT-B/16 | R@10 | 0.736 | 0.819 | **+0.082** | 9cead57 |
+| 2026-06-06 | 02 | SigLIP ViT-B/16 | R@10 | 0.697 | 0.792 | **+0.095** | 9cead57 |
+| 2026-06-06 | 02 | DINOv2 (CLS) | R@10 | 0.116 | 0.142 | +0.026 | 9cead57 |
+| 2026-06-06 | 02 | ImageNet ViT-B/16 | R@10 | 0.084 | 0.108 | +0.023 | 9cead57 |
+| 2026-06-06 | 02 | DINOv2 (mean) | R@10 | 0.060 | 0.074 | +0.014 | 9cead57 |
+| 2026-06-06 | 02 | I-JEPA ViT-H/14 | R@10 | 0.054 | 0.068 | +0.014 | 9cead57 |
+| 2026-06-06 | 02 | random ViT-B/16 | R@10 | 0.042 | 0.055 | +0.012 | 9cead57 |
+| 2026-06-06 | 02 | MAE ViT-B/16 | R@10 | 0.036 | 0.047 | +0.011 | 9cead57 |
+
+**Confound finding (legible res):** blanking the top 25% (the shared Wikipedia logo/search/nav template) *improves* retrieval for **every** encoder and the gain scales with reading ability (readers +0.08–0.10, floor +0.01) — **no encoder drops, so none fingerprints the title**. The template is non-discriminative noise diluting the page mean; removing it helps the readers most. Reproduces+extends the v3 "blanking moves the opposite way" result to the full grid at native-224.
+
 _(append: one row per measurement; never overwrite a prior row)_
