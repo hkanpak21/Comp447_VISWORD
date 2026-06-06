@@ -58,14 +58,20 @@ def chunks_of(text: str, k: int) -> list[str]:
 
 
 @torch.no_grad()
-def bert_embed(texts: list[str], tok, bert, max_tokens: int, device, batch: int = 64) -> torch.Tensor:
-    out = []
+def bert_embed_both(texts: list[str], tok, bert, max_tokens: int, device, batch: int = 64):
+    """One BERT pass -> (cls_embeds, mean_embeds), both L2-normalised. mean = masked
+    mean over tokens (CLS pooling is weak; mean-pool is the standard stronger readout)."""
+    cls_o, mean_o = [], []
+    if not texts:
+        return torch.empty(0, 768), torch.empty(0, 768)
     for s in range(0, len(texts), batch):
         enc = tok(texts[s:s + batch], padding="max_length", truncation=True,
                   max_length=max_tokens, return_tensors="pt").to(device)
-        cls = bert(**enc).last_hidden_state[:, 0, :].float()
-        out.append(F.normalize(cls, dim=-1).cpu())
-    return torch.cat(out) if out else torch.empty(0, 768)
+        h = bert(**enc).last_hidden_state.float()           # (B, T, 768)
+        m = enc["attention_mask"].unsqueeze(-1).float()     # (B, T, 1)
+        cls_o.append(F.normalize(h[:, 0, :], dim=-1).cpu())
+        mean_o.append(F.normalize((h * m).sum(1) / m.sum(1).clamp(min=1), dim=-1).cpu())
+    return torch.cat(cls_o), torch.cat(mean_o)
 
 
 def recall_cross(query: torch.Tensor, gallery: torch.Tensor, ks) -> dict:
@@ -111,12 +117,20 @@ def main() -> int:
         for c in chunks_of(body, args.chunks):
             chunk_texts.append(c); chunk_pids.append(local)
 
-    title_emb = bert_embed(titles, tok, bert, args.max_text_tokens, device)
-    body_emb = bert_embed(bodies, tok, bert, args.max_text_tokens, device)
-    chunk_emb = bert_embed(chunk_texts, tok, bert, args.max_text_tokens, device)
+    title_cls, title_mean = bert_embed_both(titles, tok, bert, args.max_text_tokens, device)
+    body_cls, body_mean = bert_embed_both(bodies, tok, bert, args.max_text_tokens, device)
+    chunk_cls, chunk_mean = bert_embed_both(chunk_texts, tok, bert, args.max_text_tokens, device)
+    cpid = torch.tensor(chunk_pids)
 
-    body_reid = page_reid_recall(chunk_emb, torch.tensor(chunk_pids), k_values=tuple(args.k_values))
-    title2body = recall_cross(title_emb, body_emb, args.k_values)
+    pools = {}
+    for name, ce, te, be in (("cls", chunk_cls, title_cls, body_cls),
+                             ("mean", chunk_mean, title_mean, body_mean)):
+        reid = page_reid_recall(ce, cpid, k_values=tuple(args.k_values))
+        pools[name] = {
+            "body_reid_recall": reid["recall"],             # comparable to visual crop->page LOO
+            "body_reid_sim_gap": reid["sanity"]["gap"],
+            "title_to_body_recall": recall_cross(te, be, args.k_values),
+        }
 
     args.out.mkdir(parents=True, exist_ok=True)
     result = {
@@ -124,9 +138,8 @@ def main() -> int:
         "host": socket.gethostname(), "git_sha": git_sha(root), "device": str(device),
         "num_eval_pages": int(len(eval_idx)), "chunks_per_page": args.chunks,
         "max_text_tokens": args.max_text_tokens,
-        "body_reid_recall": body_reid["recall"],            # comparable to visual crop->page LOO
-        "body_reid_eligible": body_reid["num_queries_eligible"],
-        "title_to_body_recall": title2body,                 # cross-field "title version"
+        "body_reid_eligible": int(page_reid_recall(chunk_cls, cpid, k_values=(10,))["num_queries_eligible"]),
+        "pooling": pools,   # CLS (= the reader's target) vs mean-pool (stronger readout)
     }
     (args.out / "perfect_text_bound.json").write_text(json.dumps(result, indent=2))
     print(json.dumps(result, indent=2))

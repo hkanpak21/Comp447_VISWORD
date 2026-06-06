@@ -103,4 +103,16 @@ Protocol: **page-level same-page re-identification**, crop query → per-page me
 
 **Confound finding (legible res):** blanking the top 25% (the shared Wikipedia logo/search/nav template) *improves* retrieval for **every** encoder and the gain scales with reading ability (readers +0.08–0.10, floor +0.01) — **no encoder drops, so none fingerprints the title**. The template is non-discriminative noise diluting the page mean; removing it helps the readers most. Reproduces+extends the v3 "blanking moves the opposite way" result to the full grid at native-224.
 
+### Ticket 04 — our MAE reader (fine-tune MAE, body→BERT[CLS] regression, page-level eval)
+
+Setup: fine-tune `facebook/vit-mae-base` last-4 blocks + projection head (28.9M trainable) to regress pooled MAE features → frozen BERT[CLS] of the page BODY (Smooth-L1); 20k train pages (head, disjoint from eval), 2 epochs, native-224 crops (≤8/page). Run-dir `VISWORD_v1/runs/mae_reader_v1` · git `110c2e7` · job 1145011 (T4, 2.0h). Eval = same page-level same-page re-id.
+
+| date | what (MAE) | eval gallery | R@1 | R@5 | R@10 | R@20 | sim-gap |
+|---|---|---|---|---|---|---|---|
+| 2026-06-06 | **frozen MAE (before)** | 2000 pages | 0.009 | 0.023 | **0.036** | 0.053 | 0.001 |
+| 2026-06-07 | **MAE reader (after)** | 2000 pages | 0.005 | 0.022 | **0.039** | 0.071 | 0.010 |
+| 2026-06-07 | MAE reader (after) | 300 pages (periodic) | 0.029 | 0.101 | **0.169** | 0.277 | — |
+
+**Finding (honest):** the reader trains cleanly (loss→3e-4) and clearly learns *some* page structure — on a **300-page** gallery R@10 jumps to **0.169** — but on the **2000-page** gallery it is only **0.039** (vs frozen 0.036), with a near-collapsed space (sim-gap 0.010). The large 300-vs-2000 gap is the gallery-size sensitivity of a weakly-separated embedding. **Hypothesis:** the **BERT[CLS]-of-body target is itself weakly discriminative** across Wikipedia pages (CLS pooling is weak; bodies share encyclopedic style) → the reader inherits the target's weak separability. The perfect-text bound (ticket 05, below) tests this directly under CLS vs mean-pool. If confirmed, the fix is a stronger text target (mean-pooled BERT) or a contrastive objective — a follow-up for the operator (objective was chosen = CLS-regression, matching Barış).
+
 _(append: one row per measurement; never overwrite a prior row)_
