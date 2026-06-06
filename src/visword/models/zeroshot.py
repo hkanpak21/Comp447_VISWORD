@@ -306,8 +306,49 @@ class ZeroShotIJepa(nn.Module):
         return F.normalize(feats, p=2, dim=-1)
 
 
+class ZeroShotMAE(nn.Module):
+    """Frozen MAE encoder (He 2022) — pixel-reconstruction masked autoencoder,
+    image-only, no text supervision. The new document-family-adjacent baseline
+    for the legible grid and the base for our own reader (ticket 04); contrasts
+    with I-JEPA (feature-prediction) as pixel-reconstruction SSL.
+
+    Loads ``facebook/vit-mae-base`` (ViT-B/16, 768-d, 224x224). MAE's forward
+    randomly masks 75% of patches by default — we set ``mask_ratio = 0`` so the
+    FULL image is encoded and the pooled embedding is deterministic. MAE has no
+    contrastively-trained CLS, so we mean-pool the patch tokens (as for I-JEPA).
+    MAE was pretrained with ImageNet stats, matching the dataset transform — no
+    inline renormalisation needed.
+    """
+
+    HF_NAME = "facebook/vit-mae-base"
+
+    def __init__(self, cfg: Config | None = None) -> None:
+        super().__init__()
+        from transformers import ViTMAEModel
+        self.model = ViTMAEModel.from_pretrained(self.HF_NAME)
+        # Encode ALL patches (no random masking) -> deterministic embedding.
+        self.model.config.mask_ratio = 0.0
+        if hasattr(self.model, "embeddings"):
+            self.model.embeddings.config.mask_ratio = 0.0
+        for p in self.model.parameters():
+            p.requires_grad = False
+
+    @property
+    def descriptor_dim(self) -> int:
+        return int(self.model.config.hidden_size)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        with torch.no_grad():
+            out = self.model(pixel_values=x)
+            # last_hidden_state: (B, 1 + num_patches, hidden); index 0 is CLS.
+            # Mean-pool the patch tokens (permutation-invariant, so robust to the
+            # MAE shuffle even though mask_ratio=0 keeps them all).
+            feats = out.last_hidden_state[:, 1:, :].mean(dim=1).float()
+        return F.normalize(feats, p=2, dim=-1)
+
+
 __all__ = [
     "ZeroShotDINOv2", "ZeroShotCLIPImage", "ZeroShotImageNetViT",
     "ZeroShotSigLIP", "ZeroShotSigLIPText", "ZeroShotPlainViT", "ZeroShotIJepa",
-    "DINOv2LinearProbe",
+    "ZeroShotMAE", "DINOv2LinearProbe",
 ]
