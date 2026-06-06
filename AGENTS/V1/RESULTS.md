@@ -126,4 +126,15 @@ Run-dir `VISWORD_v1/runs/perfect_text_v1` · git `e0fa001` · job 1145304 (T4, 3
 
 **Finding:** text is **highly discriminative** — perfect-text body-re-id ceiling = **0.94 (mean-pool) / 0.75 (CLS)**. Two consequences: (1) the visual **CLIP (0.736) already sits at the CLS-text level (0.747)**, with clear headroom to the mean-pool ceiling — i.e. better *reading* (not just layout) is what would close the gap; (2) the MAE reader's 0.039 is far below its own target's 0.747 ceiling → confirms regression-collapse, not a weak target.
 
+### Ticket 06 — attention "where it reads" (frozen MAE vs trained reader)
+
+Run-dir `VISWORD_v1/runs/attention_v1` · git `fa7a34a` · job 1145360 (T4, 40s). 8 eval pages / 64 native-224 crops; metric = fraction of last-layer CLS→patch attention mass on INK (non-white) patches; heatmap overlays saved in the run-dir.
+
+| model | attention-on-text |
+|---|---|
+| frozen MAE | 0.627 |
+| MAE reader (after) | 0.627 |
+
+**Finding:** MAE places ~63% of CLS→patch attention on text/ink patches, and the CLS-regression fine-tune did **not** change it (0.6273 → 0.6274) — corroborating regression-collapse: the fine-tune adjusted the head toward the target centroid without altering where the encoder looks. (CLIP / DINOv2 attention needs hook-based extraction — a follow-up.)
+
 _(append: one row per measurement; never overwrite a prior row)_
