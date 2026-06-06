@@ -13,7 +13,10 @@ same-page re-identification** (pool tile embeddings → page vector). Report the
 params/throughput. This is fully independent of Barış's I-JEPA checkpoint.
 
 Scientific note: contrasts with Barış's I-JEPA reader — MAE reconstructs *pixels*,
-I-JEPA predicts *features*; both taught to read via a body-text target.
+I-JEPA predicts *features*; both taught to read via a body-text target. MAE's pixel
+objective preserves high-frequency detail (good for glyphs), but its encoder still uses
+the same low-pass linear patch-embed — so if reading is weak, pair with a conv stem or
+smaller patches (this links to issue-09). See [../LITERATURE.md](../LITERATURE.md).
 
 ## Acceptance criteria
 - [ ] A training run **completes** end-to-end (config, metrics log, checkpoint written).

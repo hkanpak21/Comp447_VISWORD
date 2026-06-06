@@ -1,7 +1,9 @@
 # V1 — Issue index
 
 Task tickets for [PRD1.md](../PRD1.md). See [../README.md](../README.md) for the plain
-one-pager and [../RESULTS.md](../RESULTS.md) for the append-only results ledger.
+one-pager, [../RESULTS.md](../RESULTS.md) for the append-only results ledger, and
+[../LITERATURE.md](../LITERATURE.md) for the lit grounding behind E1/E4/E6/E7 (read it
+before building the high-freq/global arms).
 
 **Owners:** `[US]` = hkanpak21's lane · `[BARIŞ]` = delegated to Barış (he reads the repo).
 The two lanes are **non-overlapping**: Barış owns the **I-JEPA** Text-Target reader (he
