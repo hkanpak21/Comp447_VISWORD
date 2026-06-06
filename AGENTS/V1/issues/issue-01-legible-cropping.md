@@ -20,3 +20,17 @@ crops to eyeball and a fresh evaluation slice disjoint from training pages.
 
 ## Blocked by
 - issue-00 (backup before changing the data pipeline).
+
+## Notes / scope (added during implementation — `TextAwareCropper`)
+- The new `TextAwareCropper` lives alongside the untouched `NonOverlappingCropper` in
+  [cropper.py](../../../src/visword/data/cropper.py) (additive). `target_size` defaults to
+  `crop_size` → no downsample; the secondary high-res path sets them unequal.
+- **Line-snapping is vertical (y-axis) only.** Inter-line gaps are found via a horizontal
+  projection profile and tile y-boundaries snap into them, so no glyph *row* is sliced.
+  Horizontal (x-axis) tiling still cuts a wide text column at native `crop_size` strides
+  (words can be split left/right); this is in scope per D16 (native-224 grid for all encoders).
+- **Fragment exclusion is best-effort.** Blank/low-text tiles are dropped (`min_text_ratio`),
+  and gap-snapping prevents half-lines for normal body text (lines ≪ `crop_size`). A single
+  line *taller* than `crop_size` has no gap to snap to and is hard-cut (test-pinned); this
+  edge does not occur for Wikipedia body text but the AC wording "fragment excluded" is
+  best-effort, not absolute.
