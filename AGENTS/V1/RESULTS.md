@@ -70,6 +70,22 @@ re-identification, 48GB-class GPU. Fill run-dir + git SHA for every row.
 | date | slice | what (encoder / setup) | resolution | metric | value | run-dir | git SHA | notes |
 |---|---|---|---|---|---|---|---|---|
 | 2026-06-06 | 01 | legible rebuild: `TextAwareCropper` (line-gap-snapped, native) | native-224 (no shrink) | mean crops/page | **21.75** (old 490→224: 4.0) | `VISWORD_v1/runs/20260606T134506Z_8ced450_legible_crops` | 8ced450 | body text legible (verified vs old smear); + disjoint eval slice **2000 pages**, seed 42 → `eval_split.json` |
-| _pending_ | 02 | first single-encoder legible retrieval | native-224 | R@10 | — | — | — | first new number |
+
+### Ticket 02 — re-baseline grid @ legible resolution (NEW protocol — not directly comparable to the 490→224 baseline)
+
+Protocol: **page-level same-page re-identification**, crop query → per-page mean gallery, **leave-one-out**; native-224 legible crops (`TextAwareCropper`); 2000-page disjoint eval slice (39,859 crops); single-vector wrapper; frozen (zero-shot). Run-dir `VISWORD_v1/runs/rebaseline_grid_v1` · git `993fdcc` · job 1144146 (T4). Full R@{1,5,10,20}+sim-gap+params+throughput in `grid_summary.json`.
+
+| date | slice | encoder (frozen, native-224) | metric | R@10 | run-dir | git SHA | notes (R@1 / sim-gap / params) |
+|---|---|---|---|---|---|---|---|
+| 2026-06-06 | 02 | CLIP ViT-B/16 | R@10 | **0.736 ★** | `rebaseline_grid_v1` | 993fdcc | R@1 0.567 / gap 0.168 / 150M |
+| 2026-06-06 | 02 | SigLIP ViT-B/16 | R@10 | 0.697 | `rebaseline_grid_v1` | 993fdcc | R@1 0.521 / gap 0.095 / 203M |
+| 2026-06-06 | 02 | DINOv2 ViT-B/14 (CLS) | R@10 | 0.116 | `rebaseline_grid_v1` | 993fdcc | R@1 0.041 / gap 0.033 / 87M |
+| 2026-06-06 | 02 | ImageNet ViT-B/16 | R@10 | 0.084 | `rebaseline_grid_v1` | 993fdcc | R@1 0.026 / gap 0.015 / 86M |
+| 2026-06-06 | 02 | DINOv2 ViT-B/14 (mean-patch) | R@10 | 0.060 | `rebaseline_grid_v1` | 993fdcc | R@1 0.017 / gap 0.019 / 87M |
+| 2026-06-06 | 02 | I-JEPA ViT-H/14 | R@10 | 0.054 | `rebaseline_grid_v1` | 993fdcc | R@1 0.015 / gap 0.012 / 631M (ViT-H, not matched-arch) |
+| 2026-06-06 | 02 | random ViT-B/16 | R@10 | 0.042 | `rebaseline_grid_v1` | 993fdcc | R@1 0.009 / gap 0.002 / 86M (floor) |
+| 2026-06-06 | 02 | **MAE ViT-B/16** (new) | R@10 | 0.036 | `rebaseline_grid_v1` | 993fdcc | R@1 0.009 / gap 0.001 / 86M — ≈random; zero-shot non-reader → motivates the reader (ticket 04) |
+
+**Finding:** the family ordering survives legibility — image-text contrastive (CLIP/SigLIP) read; image-only SSL (DINOv2, I-JEPA, MAE), supervised, and random sit near the floor. MAE (pixel-reconstruction SSL) lands at the very bottom (≈random), a near-collapsed feature space (sim-gap ≈0) — the non-reader baseline our MAE reader must lift.
 
 _(append: one row per measurement; never overwrite a prior row)_
