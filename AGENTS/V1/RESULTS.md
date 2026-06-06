@@ -69,6 +69,7 @@ re-identification, 48GB-class GPU. Fill run-dir + git SHA for every row.
 
 | date | slice | what (encoder / setup) | resolution | metric | value | run-dir | git SHA | notes |
 |---|---|---|---|---|---|---|---|---|
+| 2026-06-06 | 01 | legible rebuild: `TextAwareCropper` (line-gap-snapped, native) | native-224 (no shrink) | mean crops/page | **21.75** (old 490→224: 4.0) | `VISWORD_v1/runs/20260606T134506Z_8ced450_legible_crops` | 8ced450 | body text legible (verified vs old smear); + disjoint eval slice **2000 pages**, seed 42 → `eval_split.json` |
 | _pending_ | 02 | first single-encoder legible retrieval | native-224 | R@10 | — | — | — | first new number |
 
 _(append: one row per measurement; never overwrite a prior row)_
