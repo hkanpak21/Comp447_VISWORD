@@ -57,8 +57,8 @@ Text-Target I-JEPA in the zero-shot grid:
 | date | setup | metric | value | source |
 |---|---|---|---|---|
 | 2026-06 | I-JEPA Text-Target (full-res pretrain) zero-shot, Protocol-A | R@10 | 0.029 | report (vs plain I-JEPA 0.015) |
-| 2026-06 | I-JEPA Text-Target + MLP (30k) | R@10 | TBD | Barış running |
-| 2026-06 | I-JEPA Text-Target + SALAD (30k) | R@10 | TBD | Barış running |
+| 2026-06 | I-JEPA Text-Target + MLP (30k) | R@10 | 0.348 | runs/2026-06-04_131101_a1627a72_visword-ijepa-text-target-mlp-30_b195 |
+| 2026-06 | I-JEPA Text-Target + SALAD (30k) | R@10 | 0.704 | runs/2026-06-05_102116_a1627a72_visword-ijepa-text-target-salad-_9f04 |
 
 ---
 

@@ -13,5 +13,5 @@
 #SBATCH --time=00:10:00
 
 set -uo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")/.."/paper/report_template
+cd "${SLURM_SUBMIT_DIR:-.}/paper/report_template"
 ./build.sh

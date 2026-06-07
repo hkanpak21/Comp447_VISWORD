@@ -376,8 +376,6 @@ Encoder + head & R@1 & R@10 & $\Delta$ZS \\
 \rowcolor{cFT}  DINOv2 + MLP \,\,(30k)    & 0.351 & 0.787 & $+0.729$ \\
 \rowcolor{cFT}  DINOv2 + SALAD (30k)      & 0.512 & 0.880 & $+0.822$ \\
 \rowcolor{cFT}  DINOv2 + SALAD (50k)      & \textbf{0.569} & \textbf{0.915} & $+0.857$ \\
-\rowcolor{cFT}  I-JEPA Text-Target + MLP (30k) & TBD & TBD & TBD \\
-\rowcolor{cFT}  I-JEPA Text-Target + SALAD (30k) & TBD & TBD & TBD \\
 \rowcolor{cFT}  CLIP\, + SALAD\, (30k)     & 0.601 & 0.724 & $-0.055$ \\
 \rowcolor{cFT}  CLIP\, + MLP\, (30k)$^\dagger$ & 0.000 & 0.000 & collapsed \\
 \bottomrule
@@ -405,6 +403,45 @@ DINOv2 ($10^{-5}$) caused immediate divergence in earlier
 attempts; $10^{-7}$ was chosen to avoid that, but evidently the
 CLIP+MLP combination cannot navigate the resulting flat-loss
 basin. A multi-LR sweep is the proper next step but is deferred.
+
+\subsection{Native Legible Protocol (224 $\to$ 224)}
+\label{sec:native_legible}
+
+To analyze the models' capability of reading legible, native-resolution text (rather than downsampled headlines), we establish the Native Legible Protocol ($224 \to 224$). Here, Wikipedia screenshots are cropped without downsampling, keeping body text sharp and legible. Table~\ref{tab:native_legible} reports the results for the main baselines, while Table~\ref{tab:native_legible_ijepa} isolates different I-JEPA pretraining configurations. While the family ranking (contrastive vs.\ SSL) is preserved, we observe that zero-shot retrieval improves for all models since text templates are not distorted. The MAE baseline collapses under standard regression but recovers under InfoNCE contrastive training to yield $0.098$ R@10.
+
+\begin{table}[t]
+\caption{Protocol-A retrieval R@10 under the Native Legible Protocol ($224 \to 224$, no downsampling) for different pretrainings. Under this protocol, body text is fully legible to the models. Missing entries indicate configurations not yet trained at this resolution.}
+\label{tab:native_legible}
+\centering
+\small
+\begin{tabular}{lccc}
+\toprule
+Backbone / Pretraining & Zero-Shot & MLP & SALAD \\
+\midrule
+\rowcolor{cITC} CLIP ViT-B/16 & 0.736 & -- & -- \\
+\rowcolor{cITC} SigLIP ViT-B/16 & 0.697 & -- & -- \\
+\rowcolor{cSSL} DINOv2 ViT-B/14 (CLS) & 0.116 & -- & -- \\
+\rowcolor{cSSL} MAE ViT-B/16 & 0.036 & 0.098$^\dagger$ & -- \\
+\bottomrule
+\multicolumn{4}{l}{\footnotesize $^\dagger$~Fine-tuned using InfoNCE contrastive training to BERT-mean.}
+\end{tabular}
+\end{table}
+
+\begin{table}[t]
+\caption{Protocol-A retrieval R@10 under the Native Legible Protocol ($224 \to 224$, no downsampling) specifically comparing different I-JEPA pretraining configurations. Entries marked TBD indicate configurations not yet trained or evaluated at this resolution.}
+\label{tab:native_legible_ijepa}
+\centering
+\small
+\begin{tabular}{lccc}
+\toprule
+I-JEPA Variant & Zero-Shot & MLP & SALAD \\
+\midrule
+\rowcolor{cSSL} Baseline (Image-Only) & 0.054 & TBD & TBD \\
+\rowcolor{cSSL} Text-Target (Title) & TBD & TBD & TBD \\
+\rowcolor{cSSL} Text-Target (Body) & TBD & TBD & TBD \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \subsection{Vision-to-vision adapter capacity}
 \label{sec:adapter_vv}
@@ -500,15 +537,12 @@ Encoder & orig.\ R@10 & b-15 R@10 & $\Delta$ \\
 \rowcolor{cITC} SigLIP zero-shot       & 0.624 & 0.731 & $+0.106$ \\
 \rowcolor{cSSL} DINOv2 zero-shot       & 0.058 & 0.058 & $-0.000$ \\
 \rowcolor{cSSL} I-JEPA zero-shot       & 0.015 & 0.012 & $-0.003$ \\
-\rowcolor{cSSL} I-JEPA Text zero-shot  & TBD & TBD & TBD \\
 \rowcolor{cSUP} ImageNet zero-shot     & 0.031 & 0.032 & $+0.001$ \\
 \rowcolor{cRND} Plain-ViT zero-shot    & 0.029 & 0.030 & $+0.001$ \\
 \midrule
 \rowcolor{cFT}  DINOv2-MLP-30k         & 0.787 & 0.494 & $-0.292$ \\
 \rowcolor{cFT}  DINOv2-SALAD-30k       & 0.880 & 0.720 & $-0.161$ \\
 \rowcolor{cFT}  DINOv2-SALAD-50k       & 0.915 & 0.673 & $-0.242$ \\
-\rowcolor{cFT}  I-JEPA-Text-MLP-30k    & TBD & TBD & TBD \\
-\rowcolor{cFT}  I-JEPA-Text-SALAD-30k  & TBD & TBD & TBD \\
 \rowcolor{cFT}  CLIP-SALAD-30k         & 0.724 & 0.687 & $-0.037$ \\
 \bottomrule
 \end{tabular}
