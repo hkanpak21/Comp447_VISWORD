@@ -145,9 +145,13 @@ Same MAE reader (last-4 blocks + head, 28.9M trainable) but **InfoNCE** between 
 |---|---|---|---|---|---|
 | 2026-06-06 | frozen | — | 2000 | 0.036 | 0.001 |
 | 2026-06-07 | regression | Smooth-L1 → BERT[CLS] | 2000 | 0.039 | 0.010 |
-| 2026-06-07 | **contrastive** | InfoNCE → BERT-mean | 2000 | **0.063** | **0.293** |
-| 2026-06-07 | contrastive | InfoNCE → BERT-mean | 300 (periodic) | 0.216 | — |
+| 2026-06-07 | contrastive (2 epochs, 23 neg) | InfoNCE → BERT-mean | 2000 | 0.063 | 0.293 |
+| 2026-06-07 | contrastive (2 epochs) | InfoNCE → BERT-mean | 300 (periodic) | 0.216 | — |
+| 2026-06-07 | **contrastive (6 epochs, 39 neg)** ★ | InfoNCE → BERT-mean | 2000 | **0.098** | **0.318** |
+| 2026-06-07 | contrastive (6 epochs) | InfoNCE → BERT-mean | 300 (periodic) | **0.279** | — |
 
-**Finding:** contrastive **fixes the collapse** — sim-gap 0.010 → **0.293** (genuine page separation), 2000-gallery R@10 ~doubles vs frozen (0.063 vs 0.036) and beats regression (0.039); 300-gallery 0.216. Confirms regression-collapse was the bottleneck, not the target. Absolute recall is still well below the 0.94 perfect-text ceiling — loss was still descending at 2 epochs with only ~23 in-batch negatives → more epochs + more negatives is the headroom (continuation running).
+Continuation (6 epochs total, 40-page batches): run-dir `mae_reader_contrastive_v1` (resumed), job 1146109 (T4, +2.5h).
+
+**Finding:** contrastive **fixes the regression-collapse** and keeps improving with scale. Full reader progression on the hard 2000-page gallery: frozen **0.036** → regression 0.039 → contrastive-2ep 0.063 → **contrastive-6ep 0.098** (2.7× frozen); on 300 pages 0.169 → **0.279**. Sim-gap 0.001 → **0.318** (genuine page separation, no collapse). Near plateau at this scale (0.276→0.279 over the last evals). Still below CLIP (0.736) and the 0.94 perfect-text ceiling — expected, since MAE's pixel-reconstruction features are a weaker starting point than CLIP's image-text-aligned ones. **Further headroom (not yet run):** more train pages (374k available vs 20k used), memory-bank/larger-batch negatives, or a larger MAE — operator's call.
 
 _(append: one row per measurement; never overwrite a prior row)_
