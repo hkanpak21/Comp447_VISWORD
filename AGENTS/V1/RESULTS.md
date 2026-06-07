@@ -137,4 +137,17 @@ Run-dir `VISWORD_v1/runs/attention_v1` · git `fa7a34a` · job 1145360 (T4, 40s)
 
 **Finding:** MAE places ~63% of CLS→patch attention on text/ink patches, and the CLS-regression fine-tune did **not** change it (0.6273 → 0.6274) — corroborating regression-collapse: the fine-tune adjusted the head toward the target centroid without altering where the encoder looks. (CLIP / DINOv2 attention needs hook-based extraction — a follow-up.)
 
+### Ticket 04b — contrastive objective (the regression-collapse fix; operator "go on")
+
+Same MAE reader (last-4 blocks + head, 28.9M trainable) but **InfoNCE** between each crop's MAE embedding and its page's **mean-pool BERT-body** anchor (in-batch negatives, 24-page batches), 20k pages, 2 epochs. Run-dir `VISWORD_v1/runs/mae_reader_contrastive_v1` · git `d87b7cb` · job 1145959 (T4, 1.4h).
+
+| date | MAE reader | objective | eval gallery | R@10 | sim-gap |
+|---|---|---|---|---|---|
+| 2026-06-06 | frozen | — | 2000 | 0.036 | 0.001 |
+| 2026-06-07 | regression | Smooth-L1 → BERT[CLS] | 2000 | 0.039 | 0.010 |
+| 2026-06-07 | **contrastive** | InfoNCE → BERT-mean | 2000 | **0.063** | **0.293** |
+| 2026-06-07 | contrastive | InfoNCE → BERT-mean | 300 (periodic) | 0.216 | — |
+
+**Finding:** contrastive **fixes the collapse** — sim-gap 0.010 → **0.293** (genuine page separation), 2000-gallery R@10 ~doubles vs frozen (0.063 vs 0.036) and beats regression (0.039); 300-gallery 0.216. Confirms regression-collapse was the bottleneck, not the target. Absolute recall is still well below the 0.94 perfect-text ceiling — loss was still descending at 2 epochs with only ~23 in-batch negatives → more epochs + more negatives is the headroom (continuation running).
+
 _(append: one row per measurement; never overwrite a prior row)_
