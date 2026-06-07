@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import random
 import socket
 import subprocess
 import time
@@ -58,11 +59,18 @@ def read_body(cache_dir: Path, row: dict) -> str:
 
 
 class PageCrops(Dataset):
-    """One page -> its native-224 legible crops (capped) + the page's target index."""
+    """One page -> its native-224 legible crops (capped) + the page's target index.
 
-    def __init__(self, cache_dir, rows, page_idx, cropper, max_crops):
+    Ticket 07: with probability ``title_mask_prob`` the top ``title_mask_frac`` of the page
+    is painted white BEFORE cropping (random title/header-region masking), so the reader
+    can't bind page identity to the title bar.
+    """
+
+    def __init__(self, cache_dir, rows, page_idx, cropper, max_crops,
+                 title_mask_prob=0.0, title_mask_frac=0.25):
         self.cache_dir, self.rows = cache_dir, rows
         self.page_idx, self.cropper, self.max_crops = page_idx, cropper, max_crops
+        self.title_mask_prob, self.title_mask_frac = title_mask_prob, title_mask_frac
 
     def __len__(self):
         return len(self.page_idx)
@@ -70,7 +78,12 @@ class PageCrops(Dataset):
     def __getitem__(self, i):
         gi = int(self.page_idx[i])
         with Image.open(self.cache_dir / self.rows[gi]["image_path"]) as im:
-            crops = self.cropper(im.convert("RGB"))[: self.max_crops]
+            page = im.convert("RGB")
+            if self.title_mask_prob > 0.0 and random.random() < self.title_mask_prob:
+                arr = np.asarray(page).copy()
+                arr[: int(round(arr.shape[0] * self.title_mask_frac)), :, :] = 255
+                page = Image.fromarray(arr)
+            crops = self.cropper(page)[: self.max_crops]
         x = torch.stack([_T(c) for c in crops]) if crops else torch.empty(0, 3, 224, 224)
         return x, i
 
@@ -162,6 +175,9 @@ def main() -> int:
     ap.add_argument("--objective", choices=["regress", "contrastive"], default="regress",
                     help="regress = Smooth-L1 to BERT[CLS]; contrastive = InfoNCE crop<->mean-pool-BERT (in-batch negatives)")
     ap.add_argument("--temp", type=float, default=0.07, help="contrastive temperature")
+    ap.add_argument("--title-mask-prob", type=float, default=0.0,
+                    help="ticket 07: prob of blanking the top title region during training")
+    ap.add_argument("--title-mask-frac", type=float, default=0.25)
     ap.add_argument("--seed", type=int, default=42)
     args = ap.parse_args()
 
@@ -202,7 +218,8 @@ def main() -> int:
         [{"params": head_params, "lr": args.lr_head},
          {"params": bb_params, "lr": args.lr_backbone}], weight_decay=args.weight_decay)
 
-    ds = PageCrops(args.cache_dir, rows, train_idx, cropper, args.max_crops_per_page)
+    ds = PageCrops(args.cache_dir, rows, train_idx, cropper, args.max_crops_per_page,
+                   title_mask_prob=args.title_mask_prob, title_mask_frac=args.title_mask_frac)
     dl = DataLoader(ds, batch_size=args.batch_pages, shuffle=True, num_workers=args.num_workers,
                     collate_fn=_collate, drop_last=True, persistent_workers=args.num_workers > 0)
 
