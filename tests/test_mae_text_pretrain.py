@@ -60,3 +60,30 @@ def test_mae_text_training_one_run_finishes(tmp_path) -> None:
     assert json.loads((out / "config.resolved.json").read_text())["text_source"] == "body"
     rows = [json.loads(x) for x in (out / "metrics.jsonl").read_text().splitlines() if x.strip()]
     assert any("loss" in r for r in rows), "no training loss logged"
+
+
+@pytest.mark.integration
+def test_mae_text_contrastive_one_run_finishes(tmp_path) -> None:
+    import torch
+    if not torch.cuda.is_available():
+        pytest.skip("CUDA required")
+    data_dir = os.environ.get("DATA_DIR") or str(PROJECT_ROOT / "data")
+    cache = Path(data_dir) / "wiki_ss"
+    if not (cache / "manifest.json").exists():
+        pytest.skip("no wiki_ss cache")
+
+    out = tmp_path / "maecontrast"
+    env = {**os.environ, "PYTHONPATH": str(SRC)}
+    cmd = [
+        sys.executable, "-m", "visword.train_mae_text",
+        "--cache-dir", str(cache), "--out", str(out),
+        "--objective", "contrastive", "--temp", "0.07",
+        "--num-train", "12", "--num-eval", "8", "--eval-pages", "4",
+        "--max-crops-per-page", "2", "--eval-max-crops", "2",
+        "--epochs", "1", "--batch-pages", "4", "--num-workers", "0",
+        "--eval-every-steps", "2", "--max-text-tokens", "64",
+    ]
+    res = subprocess.run(cmd, cwd=PROJECT_ROOT, env=env, capture_output=True, text=True)
+    assert res.returncode == 0, f"contrastive train exited {res.returncode}\n{res.stdout}\n{res.stderr}"
+    assert (out / "final_eval.json").exists()
+    assert json.loads((out / "config.resolved.json").read_text())["bert_pooling"] == "mean"

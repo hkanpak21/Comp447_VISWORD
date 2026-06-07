@@ -36,4 +36,6 @@ PYTHONPATH=src python -m visword.train_mae_text \
     --batch-pages "${BATCH_PAGES:-8}" \
     --num-trainable-blocks "${TRAINABLE_BLOCKS:-4}" \
     --max-text-tokens "${MAX_TEXT_TOKENS:-256}" \
-    --eval-every-steps "${EVAL_EVERY:-200}"
+    --eval-every-steps "${EVAL_EVERY:-200}" \
+    --objective "${OBJECTIVE:-regress}" \
+    --temp "${TEMP:-0.07}"

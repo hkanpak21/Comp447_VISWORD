@@ -85,8 +85,12 @@ def _collate(batch):
 
 
 @torch.no_grad()
-def bert_cls_targets(rows, page_idx, cache_dir, max_tokens, device, batch=64):
-    """Precompute normalised frozen BERT[CLS] of each page's body -> (P, 768)."""
+def bert_targets(rows, page_idx, cache_dir, max_tokens, device, pooling="cls", batch=64):
+    """Precompute normalised frozen BERT body embeddings -> (P, 768).
+
+    pooling="cls" (regression target, matches Barış) or "mean" (masked mean — the much
+    stronger readout per the perfect-text bound; used as the contrastive text anchor).
+    """
     from transformers import AutoModel, AutoTokenizer
     tok = AutoTokenizer.from_pretrained("bert-base-uncased")
     bert = AutoModel.from_pretrained("bert-base-uncased").to(device).eval()
@@ -95,8 +99,13 @@ def bert_cls_targets(rows, page_idx, cache_dir, max_tokens, device, batch=64):
         texts = [read_body(cache_dir, rows[int(g)]) for g in page_idx[s:s + batch]]
         enc = tok(texts, padding="max_length", truncation=True,
                   max_length=max_tokens, return_tensors="pt").to(device)
-        cls = bert(**enc).last_hidden_state[:, 0, :].float()
-        out.append(F.normalize(cls, dim=-1).cpu())
+        h = bert(**enc).last_hidden_state.float()
+        if pooling == "mean":
+            m = enc["attention_mask"].unsqueeze(-1).float()
+            v = (h * m).sum(1) / m.sum(1).clamp(min=1)
+        else:
+            v = h[:, 0, :]
+        out.append(F.normalize(v, dim=-1).cpu())
     del bert
     if device.type == "cuda":
         torch.cuda.empty_cache()
@@ -150,6 +159,9 @@ def main() -> int:
     ap.add_argument("--num-trainable-blocks", type=int, default=4)
     ap.add_argument("--max-text-tokens", type=int, default=256)
     ap.add_argument("--eval-every-steps", type=int, default=200)
+    ap.add_argument("--objective", choices=["regress", "contrastive"], default="regress",
+                    help="regress = Smooth-L1 to BERT[CLS]; contrastive = InfoNCE crop<->mean-pool-BERT (in-batch negatives)")
+    ap.add_argument("--temp", type=float, default=0.07, help="contrastive temperature")
     ap.add_argument("--seed", type=int, default=42)
     args = ap.parse_args()
 
@@ -165,9 +177,9 @@ def main() -> int:
     cropper = TextAwareCropper(crop_size=224, target_size=224)
 
     ckpt_dir = args.out / "checkpoints"; ckpt_dir.mkdir(parents=True, exist_ok=True)
+    _pooling = "mean" if args.objective == "contrastive" else "cls"
     resolved = {**{k: (str(v) if isinstance(v, Path) else v) for k, v in vars(args).items()},
-                "text_source": "body", "objective": "smooth_l1_to_bert_cls",
-                "base": MAEBodyReader.HF_NAME}
+                "text_source": "body", "bert_pooling": _pooling, "base": MAEBodyReader.HF_NAME}
     (args.out / "config.resolved.json").write_text(json.dumps(resolved, indent=2))
     (args.out / "provenance.json").write_text(json.dumps({
         "ts_utc": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
@@ -175,8 +187,9 @@ def main() -> int:
         "num_train_pages": int(len(train_idx)), "num_eval_pages": int(len(eval_idx)),
     }, indent=2))
 
-    print(f"precomputing BERT[CLS] body targets for {len(train_idx)} train pages ...", flush=True)
-    targets = bert_cls_targets(rows, train_idx, args.cache_dir, args.max_text_tokens, device).to(device)
+    print(f"precomputing BERT-{_pooling} body targets for {len(train_idx)} train pages ...", flush=True)
+    targets = bert_targets(rows, train_idx, args.cache_dir, args.max_text_tokens, device,
+                           pooling=_pooling).to(device)
 
     reader = MAEBodyReader(num_trainable_blocks=args.num_trainable_blocks).to(device)
     n_train_p = sum(p.numel() for p in reader.trainable_parameters())
@@ -214,9 +227,17 @@ def main() -> int:
         for crops, tgt_idx in dl:
             if crops.shape[0] == 0:
                 continue
-            crops = crops.to(device); tgt = targets[tgt_idx.to(device)]
-            pred = reader(crops)
-            loss = F.smooth_l1_loss(pred, tgt)
+            crops = crops.to(device)
+            pred = reader(crops)                                   # (n, D) L2-normed
+            if args.objective == "contrastive":
+                # InfoNCE: each crop -> its page's mean-pool BERT-body anchor; in-batch
+                # negatives are the other distinct pages in this batch.
+                uniq, inv = torch.unique(tgt_idx, return_inverse=True)
+                anchors = targets[uniq.to(device)]                 # (U, D)
+                logits = pred @ anchors.T / args.temp              # (n, U)
+                loss = F.cross_entropy(logits, inv.to(device))
+            else:
+                loss = F.smooth_l1_loss(pred, targets[tgt_idx.to(device)])
             opt.zero_grad(); loss.backward()
             torch.nn.utils.clip_grad_norm_(reader.trainable_parameters(), args.grad_clip)
             opt.step(); gstep += 1
