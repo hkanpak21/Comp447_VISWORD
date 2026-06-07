@@ -163,4 +163,15 @@ Continuation (6 epochs total, 40-page batches): run-dir `mae_reader_contrastive_
 
 **Scaling finding (negative, honest):** 4× more train data (20k→80k, 47 in-batch negatives) gives **no improvement** — the reader **plateaus at ~0.095–0.098 @2000 / 0.279 @300**. The bottleneck is **not data quantity**; it's the MAE-backbone reading ceiling + the parameter-efficient fine-tune (last-4-blocks) + in-batch-negative count. Next levers (not run): full/more-block fine-tune, a memory-bank for many more negatives, or a stronger backbone (document-MAE / DiT).
 
+### Ticket 07 — confound control (random title-region masking)
+
+Title-erasure check (recall normal vs top-25%-blanked) on two contrastive readers (20k×6). Run-dirs `title_erasure_unmasked` / `title_erasure_masked`; masked reader `mae_reader_masked_v1`. git `3664546`, jobs 1148627/1148629/1148866 (T4).
+
+| date | reader | trained w/ title-mask (p=0.5)? | R@10 normal | R@10 blanked | delta (blank−normal) |
+|---|---|---|---|---|---|
+| 2026-06-07 | contrastive v1 | no | 0.097 | 0.110 | **+0.013** |
+| 2026-06-07 | masked variant | yes | 0.143 | 0.176 | **+0.033** |
+
+**Finding (confound controlled):** **both deltas are positive** — recall *rises* when the title is erased, so **neither reader fingerprints the title**; the v3 layout-fingerprint failure (where blanking *dropped* trained-model accuracy) is **gone** at legible resolution (body-text objective + legible crops). **Bonus (best reader):** random title-masking during fine-tuning is not just confound control — it **boosts** the reader: R@10 **0.098 → 0.143 @2000**, 0.279 → **0.371 @300**, sim-gap 0.318 → **0.404** — the strongest MAE reader, by forcing body-content reliance + acting as augmentation.
+
 _(append: one row per measurement; never overwrite a prior row)_
