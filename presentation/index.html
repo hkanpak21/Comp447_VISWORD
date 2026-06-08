@@ -532,8 +532,18 @@
 * **Goal:** Present visual page retrieval benchmarks across vision pretrainings, investigate the layout shortcut confound, and scale self-supervised predictive encoders (I-JEPA) to native resolution.
 
 ---
+# Slide 2: Background: The Visual Document Paradigm (0:30 - 1:15)
+## OCR-Free Visual Document AI
+* **The Traditional Pipeline:** OCR Engine $\to$ Text Parser $\to$ Dense Text Encoder.
+  * *Fragility:* Sensitive to scan noise, layout complexity, multilingual fonts, and math notation. Discards visual/spatial layout hierarchy.
+* **The OCR-Free Visual Alternative:** Feed raw page screenshots directly to a vision encoder.
+  * *Advantage:* Preserves all formatting, tables, figures, fonts, and multilingual context in a single visual pass.
+* **The Core Question:** Do standard general-purpose vision encoders (pretrained on natural images or image-caption pairs) naturally learn to "read" visual text, or do they only match spatial layout fingerprints?
 
-# Slide 2: Motivation & Research Questions (0:30 - 1:15)
+---
+
+
+# Slide 3: Motivation & Research Questions (1:15 - 2:00)
 ## OCR-Free Visual Retrieval
 * **The Goal:** Bypass traditional text pipelines (OCR + text encoders) to retrieve document pages directly using page screenshots, preserving layout, figures, and formatting.
 * **Core Research Inquiries:**
@@ -547,7 +557,7 @@
 
 ---
 
-# Slide 3: Phase 1 Recap: Zero-Shot & The Platonic Hypothesis (1:15 - 2:00)
+# Slide 4: Phase 1 Recap: Zero-Shot & The Platonic Hypothesis (2:00 - 2:45)
 ## Initial Findings (Progress Report Status)
 * **Zero-Shot Visual Retrieval (Protocol A, 2k pages):**
   * Image-text contrastive models (CLIP, SigLIP) dominate zero-shot page retrieval.
@@ -561,7 +571,7 @@
 
 ---
 
-# Slide 4: Phase 1 Recap: Fine-Tuning & The Title Confound (2:00 - 2:45)
+# Slide 5: Phase 1 Recap: Fine-Tuning & The Title Confound (2:45 - 3:30)
 ## Shortcut Learning vs. LEACE Erasure
 * **The Fine-Tuning Paradox:** Fine-tuning DINOv2-SALAD beats zero-shot CLIP, but relies on layout shortcuts.
 * **Title-Blanking Experiment:** Blanking the top 15% (title region) of pages:
@@ -575,7 +585,7 @@
 
 ---
 
-# Slide 5: Phase 1 Recap: I-JEPA's Latent Text Alignment (2:45 - 3:30)
+# Slide 6: Phase 1 Recap: I-JEPA's Latent Text Alignment (3:30 - 4:15)
 ## Unlocking Unsupervised Text Representation
 * **The Representation Coordinate Problem:**
   * Image-only I-JEPA features have zero-shot text-alignment near chance.
@@ -588,7 +598,7 @@
 
 ---
 
-# Slide 6: Main Focus: The Resolution Bottleneck & Cropping (3:30 - 4:15)
+# Slide 7: Main Focus: The Resolution Bottleneck & Cropping (4:15 - 5:00)
 ## Shifting to Native Legibility (New Progress)
 * **The Scale-Down Confound:** Phase 1 evaluations scaled 490x490 page crops down to 224x224.
   * This 2.19x shrink rendered body text sub-pixel and illegible.
@@ -598,11 +608,11 @@
   * Apply line-snapping heuristics to keep line boundaries intact.
   * Ensures that characters are fully legible for reading.
 
-[FIGURE: Visual comparison of 224x224 squashed crops (illegible) vs. 490x490 native crops (legible)]
+![Visual comparison of native resolution and downsized panels](figures/qualitative_resolution_comparison_1x4.png)
 
 ---
 
-# Slide 7: Main Focus: Re-Baselining the Grid & Bounds (4:15 - 5:00)
+# Slide 8: Main Focus: Re-Baselining the Grid & Bounds (5:00 - 5:45)
 ## Performance at Native Resolution
 * **The Perfect-Text Upper Bound:**
   * Mean-pooling BERT text embeddings directly from the page text.
@@ -630,7 +640,7 @@
 
 ---
 
-# Slide 8: Main Focus: Visual Document-Pretrained Encoders (5:00 - 5:45)
+# Slide 9: Main Focus: Visual Document-Pretrained Encoders (5:45 - 6:30)
 ## Evaluating Document AI Models Zero-Shot
 * **The Document-Pretrained Family:**
   * Evaluate visual encoders explicitly pretrained on documents or document OCR tasks.
@@ -649,7 +659,7 @@
 
 ---
 
-# Slide 9: Main Focus: Cross-Modal Pretraining - I-JEPA with Text Targets (5:45 - 6:45)
+# Slide 10: Main Focus: Cross-Modal Pretraining - I-JEPA with Text Targets (6:30 - 7:30)
 ## Predicting Language from Unmasked Image Context
 * **Input & Target Flow:**
   * **Frozen BERT Text Encoder:** Takes tokenized ground-truth body text of the screenshot page crop as input. Outputs semantic text embeddings `(B, T, 768)`. Completely frozen.
@@ -681,10 +691,9 @@ graph LR
     G -->|Target Text Embs| H
 ```
 
-
 ---
 
-# Slide 10: Main Focus: Ongoing Experiment - Native-Resolution Training Grid (6:45 - 7:30)
+# Slide 11: Main Focus: Ongoing Experiment - Native-Resolution Training Grid (7:30 - 8:15)
 ## Probing High-Resolution Latent Emergence on Cluster
 * **The Goal:** Benchmark standard image-only pretraining against our cross-modal text-target pretraining, and evaluate retrieval head configurations.
 * **The Training Grid:**
@@ -698,7 +707,7 @@ graph LR
 
 ---
 
-# Slide 11: Main Focus: Confound Control via Title Masking (7:30 - 8:15)
+# Slide 12: Main Focus: Confound Control via Title Masking (8:15 - 9:00)
 ## Blocking Layout Shortcuts during Training
 * **The Goal:** Force the model to read the actual body text instead of exploiting spatial layout shortcuts (the "title layout cheat").
 * **Random Title Masking:**
@@ -722,28 +731,35 @@ graph LR
 
 ---
 
-# Slide 12: Limitations & Computational Challenges (8:15 - 8:45)
-## Core Bottlenecks in Native-Resolution Document Retrieval
-* **Compute & Memory Scaling:**
-  * Processing native 490x490 crops yields 1,225 patch tokens per crop (ViT-H/14).
-  * High memory footprint causes GPU OOM, requiring small batch sizes (e.g., 2 on A40) and gradient checkpointing.
-* **Shortcut Learning (Layout Confound):**
-  * Visual encoders easily cheat by memorizing unique document style fingerprints (margins, header geometries, whitespace distribution) rather than reading.
-* **Representation Capacity (Single vs. Multi-Vector):**
-  * Single-vector models (like SALAD) struggle to pack both localized legibility details and overall document structure into a single 128-dimensional embedding.
-* **Domain Transfer Gap:**
-  * Wikipedia screenshots are clean and structured; models face performance drops when transferring to noisy, real-world multi-column PDFs and scanned documents.
+# Slide 13: Research Limitations (9:00 - 9:30)
+## Scope & Methodology Constraints
+
+* **Single Seed — No Within-Family Significance**
+  * All fine-tunes are single-seed. Cross-family gaps are large enough to survive noise (smallest gap ~0.09 R@10), but within-family comparisons (e.g., CLIP+SALAD vs. CLIP+MLP) cannot be considered statistically reliable without multi-seed reruns.
+
+* **Small Evaluation Pool (P = 2,000)**
+  * The gallery is deliberately held small for fast iteration; numbers are not directly comparable to industrial-scale retrieval (10⁵–10⁶ pages). R@k values will differ at scale.
+
+* **Forced Cropping — Body Text Remains Sub-Pixel**
+  * Feeding a full page at 224² shrinks body text to ~1–2 pixels (illegible), forcing us to tile pages into crops; this preserves readable text scale but sacrifices global page context.
+
+* **Wikipedia Only — Clean & Structured Domain**
+  * All training and evaluation is on Wikipedia screenshots, which share a consistent layout template. Generalization to noisy, multi-column, or handwritten documents (arXiv PDFs, scanned books) is untested.
+
+* **Compute Constraints — Incomplete Sweeps**
+  * Several experiments are still in progress or deferred: full-backbone I-JEPA fine-tunes at native resolution, multi-LR sweeps for CLIP, and larger memory-bank negatives for the MAE reader. Compute limits (T4 nodes, batch size ≤ 2 on A40 at 490×490) forced early stopping on some configurations.
+
 
 ---
 
-# Slide 13: Future Research Agenda: Open Questions (8:45 - 9:30)
+# Slide 14: Future Research Agenda: Open Questions (9:30 - 10:15)
 ## Roadmap for the June 14 Final Report
 * **Q1. Disentangling Features (SAE Analysis):**
   * Train Sparse Autoencoders (SAEs) on backbone latents to isolate and visualize "layout-only" vs. "text-semantic" features.
 * **Q2. Scaling the MAE Reader:**
   * Probe the limits of the MAE reader by unfreezing more/all backbone blocks and using larger negative sampler banks to break the ~0.098 recall plateau.
 * **Q3. High-Frequency Autoencoder Front-End (E7):**
-  * Integrate a frequency-aware or scale-aware visual front-end (e.g., Scale-MAE) to preserve legibility without token size blowup.
+  * Integrate a frequency-aware or scale-aware visual front-end (e.g., Scale-MAE) to super-resolve or preserve text legibility without the token-count explosion of native-resolution patches.
 * **Q4. Transfer Generalization to arXiv PDFs (E10):**
   * Evaluate how well the models fine-tuned on Wikipedia generalize to multi-column academic PDF page structures.
 * **Q5. Visual Document Question Answering (E11):**
@@ -752,7 +768,7 @@ graph LR
 
 ---
 
-# Slide 14: Conclusion & Takeaways (9:30 - 10:00)
+# Slide 15: Conclusion & Takeaways (10:15 - 10:45)
 ## Summary of Work
 * **Phase 1 Recap:** Pretraining objective determines zero-shot retrieval. Contrastive dominates; image-only has latent text structure but exploits layout coordinates when fine-tuned.
 * **Phase 2 Contribution:** Resolution is the reading bottleneck. We introduced the legible 490x490 cropping protocol to enable true reading.

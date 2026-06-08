@@ -82,7 +82,7 @@
   * Apply line-snapping heuristics to keep line boundaries intact.
   * Ensures that characters are fully legible for reading.
 
-[FIGURE: Visual comparison of 224x224 squashed crops (illegible) vs. 490x490 native crops (legible)]
+![Visual comparison of native resolution and downsized panels](figures/qualitative_resolution_comparison_1x4.png)
 
 ---
 
@@ -141,6 +141,29 @@
   * **Transformer Predictor:** Takes concatenated context visual tokens (with 2D positional embeddings) and target query tokens (learnable mask tokens + 1D text positional embeddings). Fully trainable.
 * **Pretraining Objective:** Predict the semantic BERT embeddings of the page text from only the unmasked visual context.
 * **Significance:** Forces the vision encoder to learn semantic text structures directly from visual layout and context, laying the groundwork for native-resolution document retrieval.
+
+```mermaid
+graph LR
+    %% Define Styles
+    classDef frozen fill:#1e293b,stroke:#475569,stroke-width:2px,color:#94a3b8;
+    classDef trainable fill:#7c3aed,stroke:#a78bfa,stroke-width:2px,color:#ffffff;
+    classDef data fill:#0891b2,stroke:#22d3ee,stroke-width:2px,color:#ffffff;
+    classDef loss fill:#b91c1c,stroke:#f87171,stroke-width:2px,color:#ffffff;
+
+    subgraph Visual_Pathway ["Visual Pathway (Trainable)"]
+        A[Input Image Crop]:::data --> B[Context Masking]:::data
+        B -->|Unmasked Patches| C[Context Encoder<br>ViT-H/14]:::trainable
+        C -->|Context Features| D[Predictor<br>Transformer]:::trainable
+        E[Text Mask Queries]:::trainable --> D
+    end
+
+    subgraph Text_Pathway ["Text Pathway (Frozen)"]
+        F[Page Lead Text]:::data --> G[BERT Encoder<br>Fully Frozen]:::frozen
+    end
+
+    D -->|Predicted Text Embs| H[Loss: Smooth L1]:::loss
+    G -->|Target Text Embs| H
+```
 
 ---
 
