@@ -107,12 +107,21 @@ class DiTBodyReader(nn.Module):
         else:
             self.head = nn.Linear(hidden, bert_dim)
         self._bert_dim = int(bert_dim)
+        # Crops arrive ImageNet-normalised; DiT/BEiT was pretrained with mean/std=0.5/0.5
+        # ([-1,1]). Renorm inline (else DiT sees a wrong input distribution -> near-random).
+        def _b(v):
+            return torch.tensor(v).view(1, 3, 1, 1)
+        self.register_buffer("_in_mean", _b((0.485, 0.456, 0.406)))
+        self.register_buffer("_in_std", _b((0.229, 0.224, 0.225)))
+        self.register_buffer("_dit_mean", _b((0.5, 0.5, 0.5)))
+        self.register_buffer("_dit_std", _b((0.5, 0.5, 0.5)))
 
     @property
     def descriptor_dim(self) -> int:
         return self._bert_dim
 
     def _pool(self, x: torch.Tensor) -> torch.Tensor:
+        x = (x * self._in_std + self._in_mean - self._dit_mean) / self._dit_std
         out = self.model(pixel_values=x)
         return out.last_hidden_state[:, 1:, :].mean(dim=1)  # mean patch tokens (excl. CLS)
 
