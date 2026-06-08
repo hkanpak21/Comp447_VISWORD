@@ -34,7 +34,7 @@ from torchvision import transforms
 
 from visword.data import manifest as M
 from visword.data.cropper import TextAwareCropper
-from visword.models.mae_reader import MAEBodyReader
+from visword.models.mae_reader import build_reader
 from visword.page_reid import page_reid_recall
 
 _T = transforms.Compose([
@@ -170,6 +170,8 @@ def main() -> int:
     ap.add_argument("--weight-decay", type=float, default=1e-4)
     ap.add_argument("--grad-clip", type=float, default=1.0)
     ap.add_argument("--num-trainable-blocks", type=int, default=4)
+    ap.add_argument("--backbone", choices=["mae", "dit"], default="mae",
+                    help="mae = ImageNet vit-mae-base; dit = document-pretrained microsoft/dit-base")
     ap.add_argument("--max-text-tokens", type=int, default=256)
     ap.add_argument("--eval-every-steps", type=int, default=200)
     ap.add_argument("--objective", choices=["regress", "contrastive"], default="regress",
@@ -195,7 +197,7 @@ def main() -> int:
     ckpt_dir = args.out / "checkpoints"; ckpt_dir.mkdir(parents=True, exist_ok=True)
     _pooling = "mean" if args.objective == "contrastive" else "cls"
     resolved = {**{k: (str(v) if isinstance(v, Path) else v) for k, v in vars(args).items()},
-                "text_source": "body", "bert_pooling": _pooling, "base": MAEBodyReader.HF_NAME}
+                "text_source": "body", "bert_pooling": _pooling}
     (args.out / "config.resolved.json").write_text(json.dumps(resolved, indent=2))
     (args.out / "provenance.json").write_text(json.dumps({
         "ts_utc": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
@@ -207,7 +209,7 @@ def main() -> int:
     targets = bert_targets(rows, train_idx, args.cache_dir, args.max_text_tokens, device,
                            pooling=_pooling).to(device)
 
-    reader = MAEBodyReader(num_trainable_blocks=args.num_trainable_blocks).to(device)
+    reader = build_reader(args.backbone, num_trainable_blocks=args.num_trainable_blocks).to(device)
     n_train_p = sum(p.numel() for p in reader.trainable_parameters())
     print(f"trainable params: {n_train_p/1e6:.1f}M of {sum(p.numel() for p in reader.parameters())/1e6:.0f}M", flush=True)
 

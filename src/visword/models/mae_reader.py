@@ -80,4 +80,59 @@ class MAEBodyReader(nn.Module):
         return [p for p in self.parameters() if p.requires_grad]
 
 
-__all__ = ["MAEBodyReader"]
+class DiTBodyReader(nn.Module):
+    """Document-pretrained DiT (BEiT) reader — same recipe as MAEBodyReader but on a base
+    pretrained (masked image modeling) on 42M document images, so a much stronger *reading*
+    starting point than ImageNet-MAE. Loads ``microsoft/dit-base`` (BeitModel; needs a
+    one-time .bin->safetensors conversion in the cache). Pools the patch tokens (excl. CLS)."""
+
+    HF_NAME = "microsoft/dit-base"
+
+    def __init__(self, num_trainable_blocks: int = 4, bert_dim: int = 768,
+                 proj_hidden: int | None = None, hf_name: str | None = None) -> None:
+        super().__init__()
+        from transformers import AutoModel
+        self.model = AutoModel.from_pretrained(hf_name or self.HF_NAME)
+        for p in self.model.parameters():
+            p.requires_grad = False
+        layers = self.model.encoder.layer
+        self.num_trainable_blocks = max(0, min(num_trainable_blocks, len(layers)))
+        for blk in layers[len(layers) - self.num_trainable_blocks:]:
+            for p in blk.parameters():
+                p.requires_grad = True
+        hidden = int(self.model.config.hidden_size)
+        if proj_hidden:
+            self.head = nn.Sequential(
+                nn.Linear(hidden, proj_hidden), nn.GELU(), nn.Linear(proj_hidden, bert_dim))
+        else:
+            self.head = nn.Linear(hidden, bert_dim)
+        self._bert_dim = int(bert_dim)
+
+    @property
+    def descriptor_dim(self) -> int:
+        return self._bert_dim
+
+    def _pool(self, x: torch.Tensor) -> torch.Tensor:
+        out = self.model(pixel_values=x)
+        return out.last_hidden_state[:, 1:, :].mean(dim=1)  # mean patch tokens (excl. CLS)
+
+    def embed(self, x: torch.Tensor) -> torch.Tensor:
+        return self.head(self._pool(x).float())
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return F.normalize(self.embed(x), p=2, dim=-1)
+
+    def trainable_parameters(self):
+        return [p for p in self.parameters() if p.requires_grad]
+
+
+def build_reader(backbone: str = "mae", **kw):
+    """Factory: 'mae' -> MAEBodyReader (ImageNet MAE), 'dit' -> DiTBodyReader (document MAE)."""
+    if backbone == "mae":
+        return MAEBodyReader(**kw)
+    if backbone == "dit":
+        return DiTBodyReader(**kw)
+    raise ValueError(f"unknown reader backbone {backbone!r}; expected 'mae' or 'dit'")
+
+
+__all__ = ["MAEBodyReader", "DiTBodyReader", "build_reader"]

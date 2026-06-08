@@ -23,7 +23,7 @@ from torchvision import transforms
 
 from visword.data import manifest as M
 from visword.data.cropper import TextAwareCropper
-from visword.models.mae_reader import MAEBodyReader
+from visword.models.mae_reader import build_reader
 from visword.page_reid import page_reid_recall
 
 _T = transforms.Compose([transforms.ToTensor(),
@@ -69,6 +69,7 @@ def main() -> int:
     ap.add_argument("--eval-pages", type=int, default=2000)
     ap.add_argument("--blank-frac", type=float, default=0.25)
     ap.add_argument("--num-trainable-blocks", type=int, default=4)
+    ap.add_argument("--backbone", choices=["mae", "dit"], default="mae")
     ap.add_argument("--seed", type=int, default=42)
     args = ap.parse_args()
 
@@ -78,7 +79,7 @@ def main() -> int:
     eval_idx = np.random.default_rng(args.seed).permutation(n)[n - args.num_eval:][:args.eval_pages]
     cropper = TextAwareCropper(crop_size=224, target_size=224)
 
-    reader = MAEBodyReader(num_trainable_blocks=args.num_trainable_blocks).to(device).eval()
+    reader = build_reader(args.backbone, num_trainable_blocks=args.num_trainable_blocks).to(device).eval()
     reader.load_state_dict(torch.load(args.ckpt, map_location=device)["reader"])
 
     normal = eval_recall(reader, args.cache_dir, rows, eval_idx, cropper, device, blank_frac=0.0)

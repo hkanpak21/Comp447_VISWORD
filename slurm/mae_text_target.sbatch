@@ -40,4 +40,5 @@ PYTHONPATH=src python -m visword.train_mae_text \
     --objective "${OBJECTIVE:-regress}" \
     --temp "${TEMP:-0.07}" \
     --title-mask-prob "${TITLE_MASK_PROB:-0.0}" \
-    --title-mask-frac "${TITLE_MASK_FRAC:-0.25}"
+    --title-mask-frac "${TITLE_MASK_FRAC:-0.25}" \
+    --backbone "${BACKBONE:-mae}"
