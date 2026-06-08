@@ -580,7 +580,7 @@
 
 ---
 
-# Slide 6: Main Focus: The Resolution Bottleneck & Cropping (3:30 - 4:30)
+# Slide 6: Main Focus: The Resolution Bottleneck & Cropping (3:30 - 4:15)
 ## Shifting to Native Legibility (New Progress)
 * **The Scale-Down Confound:** Phase 1 evaluations scaled 490x490 page crops down to 224x224.
   * This 2.19x shrink rendered body text sub-pixel (illegible to human and OCR models).
@@ -592,7 +592,7 @@
 
 ---
 
-# Slide 7: Main Focus: Re-Baselining the Grid & Bounds (4:30 - 5:30)
+# Slide 7: Main Focus: Re-Baselining the Grid & Bounds (4:15 - 5:00)
 ## Performance at Native Resolution
 * **The Perfect-Text Upper Bound:**
   * Mean-pooling BERT text embeddings directly from the page text yields **R@10 = 0.938**.
@@ -606,7 +606,7 @@
 
 ---
 
-# Slide 8: Main Focus: Visual Document-Pretrained Encoders (5:30 - 6:30)
+# Slide 8: Main Focus: Visual Document-Pretrained Encoders (5:00 - 5:45)
 ## Evaluating Document AI Models Zero-Shot
 * **The Document-Pretrained Family:**
   * Evaluated visual encoders explicitly pretrained on documents or document OCR tasks.
@@ -619,19 +619,31 @@
 
 ---
 
-# Slide 9: Main Focus: Scaling I-JEPA to Native Resolution (6:30 - 7:30)
-## Probing High-Resolution Latent Emergence
-* **Hypothesis:** Under legible native resolution (490x490, 1,225 tokens), self-supervised predictive pretraining (I-JEPA) will naturally capture semantic text structure.
-* **The 4-GPU Cluster Training Grid:**
-  * Launched 4 parallel training runs using A40 GPUs, avoiding resource-contended nodes to guarantee completion.
-* **Experimental Matrix:**
-  * **Objective:** Image-Only pretraining vs. Text-Target (predicting body text tokens).
-  * **Aggregation Heads:** MLP (256-d) vs. SALAD (8,448-d) optimal-transport aggregator.
-  * *Goal:* Determine if predicting masked states at native resolution induces actual text-reading capabilities.
+# Slide 9: Main Focus: Cross-Modal Pretraining - I-JEPA with Text Targets (5:45 - 6:45)
+## Predicting Language from Unmasked Image Context
+* **Pretraining Objective:** Replace standard visual feature prediction with a cross-modal (text-target) objective during I-JEPA pretraining.
+* **How it works:**
+  * The context encoder processes unmasked screenshot patches.
+  * The predictor (`VisionTransformerTextPredictor`) takes context patch representations and mask query tokens (with 1D positional embeddings for text).
+  * It predicts the **BERT semantic embeddings** of the text rendered in the masked visual regions.
+* **Pretrained Backbone:** Trained a ViT-H/14 backbone (`ijepa-text-target-all-blocks-ful_e27e`) on 90,000 Wikipedia pages using body-text target tokens at native 490x490 resolution.
+* **Significance:** Forces the vision encoder to learn semantic text structures directly from visual context, laying the groundwork for native-resolution document retrieval.
 
 ---
 
-# Slide 10: Main Focus: Confound Control via Title Masking (7:30 - 8:30)
+# Slide 10: Main Focus: Ongoing Experiment - Native-Resolution Training Grid (6:45 - 7:30)
+## Probing High-Resolution Latent Emergence on Cluster
+* **The Goal:** Benchmark standard image-only pretraining against our cross-modal text-target pretraining, and evaluate retrieval head configurations.
+* **The 4-GPU Cluster Training Grid:**
+  * Running 4 parallel training runs on A40 GPUs using native 490x490 resolution (1,225 tokens per crop).
+* **Experimental Configuration Matrix:**
+  * **Runs 1 & 2 (Image-Only Backbone):** Frozen/unfrozen I-JEPA backbone pretrained on images, comparing MLP vs. SALAD retrieval heads.
+  * **Runs 3 & 4 (Text-Target Backbone):** Unfrozen cross-modal I-JEPA backbone (`ijepa-text-target-all-blocks-ful_e27e`), comparing MLP vs. SALAD retrieval heads.
+  * *Target:* Validate if text-target pretraining provides a stronger starting point for visual retrieval than pure image pretraining.
+
+---
+
+# Slide 11: Main Focus: Confound Control via Title Masking (7:30 - 8:15)
 ## Blocking Layout Shortcuts during Training
 * **The Goal:** Force the model to read the actual body text instead of exploiting spatial layout shortcuts (the "title layout cheat").
 * **Random Title Masking:**
@@ -643,7 +655,7 @@
 
 ---
 
-# Slide 11: Main Focus: Advanced Retrieval Architectures (8:30 - 9:30)
+# Slide 12: Main Focus: Advanced Retrieval Architectures (8:15 - 9:00)
 ## Multi-Vector & Multi-Scale Vision
 * **Two-Stream Global-Local Reader:**
   * A two-stream visual pipeline designed to solve the trade-off between local legibility and global layout context.
@@ -655,13 +667,12 @@
 
 ---
 
-# Slide 12: Conclusion & Takeaways (9:30 - 10:00)
+# Slide 13: Conclusion & Takeaways (9:00 - 10:00)
 ## Summary of Work
 * **Phase 1 Recap:** Pretraining objective determines zero-shot retrieval. Contrastive dominates; image-only has latent text structure but exploits layout coordinates when fine-tuned.
 * **Phase 2 Contribution:** Resolution is the reading bottleneck. We introduced the legible 490x490 cropping protocol to enable true reading.
 * **Ongoing Work:** Re-baselined standard encoders (Nougat, MAE), and launched 4 parallel GPU runs to probe I-JEPA at native resolution.
 * **Future Vision:** Combining title masking (to block layout shortcuts) with two-stream networks and late interaction (ColPali) to build robust OCR-free page search.
-    </script>d.
     </script>
 
     <script>
