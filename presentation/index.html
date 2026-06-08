@@ -655,7 +655,7 @@
 
 ---
 
-# Slide 12: Main Focus: Advanced Retrieval Architectures (8:15 - 9:00)
+# Slide 12: Main Focus: Advanced Retrieval Architectures (8:15 - 8:45)
 ## Multi-Vector & Multi-Scale Vision
 * **Two-Stream Global-Local Reader:**
   * A two-stream visual pipeline designed to solve the trade-off between local legibility and global layout context.
@@ -667,7 +667,16 @@
 
 ---
 
-# Slide 13: Conclusion & Takeaways (9:00 - 10:00)
+# Slide 13: Future Research Agenda: Open Questions (8:45 - 9:30)
+## Agenda for the June 14 Final Report
+* **Q1. Feature Interpretability (SAE analysis):** Do features in SALAD/CLIP represent linguistic tokens (words/semantics) or only layout fingerprints (margins/headers)? Tested via Sparse Autoencoders.
+* **Q2. Platonic Alignment on Visual Text:** Does a pixel-only model align linearly with text-only models (BERT) when trained exclusively on text screens?
+* **Q3. Reading vs. Understanding:** Does the model perform basic OCR glyph-matching or higher-level semantic understanding? Evaluated via typographic attacks and perturbations.
+* **Q4. Learning Dynamics:** At what point during fine-tuning does the model transition from learning layout coordinates to learning to read text?
+
+---
+
+# Slide 14: Conclusion & Takeaways (9:30 - 10:00)
 ## Summary of Work
 * **Phase 1 Recap:** Pretraining objective determines zero-shot retrieval. Contrastive dominates; image-only has latent text structure but exploits layout coordinates when fine-tuned.
 * **Phase 2 Contribution:** Resolution is the reading bottleneck. We introduced the legible 490x490 cropping protocol to enable true reading.
