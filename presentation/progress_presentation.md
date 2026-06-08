@@ -87,7 +87,20 @@
   * Evaluate standard backbones at 490x490 native resolution.
   * Contrastive vision encoders retain their dominance, establishing a clean baseline for text retrieval.
 
-[TABLE: Re-baselined Retrieval Recalls on 2,000 pages setting (CLIP, SigLIP, DINOv2, MAE Reader, and Perfect-Text Upper Bound)]
+| Model Family / Setup | Parameter Count | R@1 (%) | R@10 (%) | Similarity Gap |
+| :--- | :---: | :---: | :---: | :---: |
+| **Perfect-Text (BERT mean-pool)** | - | - | **93.8%** | +0.198 |
+| **Perfect-Text (BERT CLS)** | - | - | **74.7%** | +0.176 |
+| **CLIP ViT-B/16 (zero-shot)** | 150M | 56.7% | **73.6%** | +0.168 |
+| **SigLIP ViT-B/16 (zero-shot)** | 203M | 52.1% | **69.7%** | +0.095 |
+| **DINOv2 ViT-B/14 (CLS, zero-shot)** | 87M | 4.1% | **11.6%** | +0.033 |
+| **ImageNet ViT-B/16 (zero-shot)** | 86M | 2.6% | **8.4%** | +0.015 |
+| **I-JEPA ViT-H/14 (zero-shot)** | 631M | 1.5% | **5.4%** | +0.012 |
+| **random ViT-B/16 (zero-shot)** | 86M | 0.9% | **4.2%** | +0.002 |
+| **MAE ViT-B/16 (frozen)** | 86M | 0.9% | **3.6%** | +0.001 |
+| **MAE Reader (contrastive, 6 epochs)** | 86M | - | **9.8%** | +0.318 |
+| **MAE Reader (title-masked, 6 epochs)** | 86M | - | **14.3%** | +0.404 |
+
 
 ---
 
@@ -102,7 +115,11 @@
   * Process document patches by bypassing standard 224x224 image compression.
   * Evaluate zero-shot retrieval capabilities to set a baseline for document-pretrained models.
 
-[TABLE: Zero-shot visual page retrieval recalls for Document-Pretrained Encoders (Nougat, Pix2Struct)]
+| Document-Pretrained Encoder | Parameter Count | R@1 (%) | R@10 (%) | Similarity Gap |
+| :--- | :---: | :---: | :---: | :---: |
+| **Nougat-base (Swin Transformer)** | 74M | 1.1% | **4.9%** | +0.002 |
+| **Pix2Struct** | 282M | *Running* | *Running* | *Running* |
+
 
 ---
 
@@ -143,6 +160,16 @@
 
 [FIGURE: Visual illustration of random title whiteout masking during fine-tuning]
 
+| Encoder / Reader | R@10 (Unblanked) | R@10 (Top-25% Blanked) | Delta (Blanked - Normal) |
+| :--- | :---: | :---: | :---: |
+| **CLIP ViT-B/16 (zero-shot)** | 73.6% | 81.9% | **+8.3%** |
+| **SigLIP ViT-B/16 (zero-shot)** | 69.7% | 79.2% | **+9.5%** |
+| **DINOv2 ViT-B/14 (zero-shot)** | 11.6% | 14.2% | **+2.6%** |
+| **MAE Reader (contrastive, 6 epochs)** | 9.7% | 11.0% | **+1.3%** |
+| **MAE Reader (masked variant)** | 14.3% | 17.6% | **+3.3%** |
+| **I-JEPA ViT-H/14 (zero-shot)** | 5.4% | 6.8% | **+1.4%** |
+
+
 ---
 
 # Slide 12: Limitations & Computational Challenges (8:15 - 8:45)
@@ -163,12 +190,15 @@
 ## Roadmap for the June 14 Final Report
 * **Q1. Disentangling Features (SAE Analysis):**
   * Train Sparse Autoencoders (SAEs) on backbone latents to isolate and visualize "layout-only" vs. "text-semantic" features.
-* **Q2. Platonic Alignment Testing:**
-  * Quantify the linear map alignment between the visual encoder and BERT. Do visual text embeddings align with native text embeddings?
-* **Q3. Legibility Robustness & Perturbation Attacks:**
-  * Stress-test models with typographic attacks (font changes, character jitter, blurring) to prove they are performing robust reading rather than layout memorization.
-* **Q4. Two-Stream Architectures:**
-  * Implement and evaluate a two-stream model (high-res local legible stream + low-res global layout overview stream) to scale token budgets.
+* **Q2. Scaling the MAE Reader:**
+  * Probe the limits of the MAE reader by unfreezing more/all backbone blocks and using larger negative sampler banks to break the ~0.098 recall plateau.
+* **Q3. High-Frequency Autoencoder Front-End (E7):**
+  * Integrate a frequency-aware or scale-aware visual front-end (e.g., Scale-MAE) to preserve legibility without token size blowup.
+* **Q4. Transfer Generalization to arXiv PDFs (E10):**
+  * Evaluate how well the models fine-tuned on Wikipedia generalize to multi-column academic PDF page structures.
+* **Q5. Visual Document Question Answering (E11):**
+  * Transition from document page re-identification to visual query QA.
+
 
 ---
 
