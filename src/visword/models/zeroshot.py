@@ -355,36 +355,54 @@ class ZeroShotPix2Struct(nn.Module):
     (``Pix2StructVisionModel``) and mean-pool its patch hidden states into a
     single vector. This gives a 768-d embedding comparable to ViT-B baselines.
 
-    Pix2Struct uses its own normalisation (mean 0.5, std 0.5 per channel);
-    the dataset transform applies ImageNet stats so we inline-renormalise.
-    Input is resized to 224×224 by the dataset pipeline; the model's internal
-    patch extraction works at that resolution.
+    ``Pix2StructVisionModel.forward`` requires ``flattened_patches`` produced
+    by ``Pix2StructImageProcessor`` — it does NOT accept raw ``pixel_values``.
+    The forward pass therefore un-normalises the ImageNet-normalised input
+    tensor back to [0, 1], converts each image to PIL, runs the processor
+    (which performs the model's HiRes patchification), and then calls the
+    vision model. All processing is done within ``torch.no_grad()``.
     """
 
     HF_NAME = "google/pix2struct-base"
-    # Pix2Struct preprocessor uses mean=0.5, std=0.5 (same as SigLIP).
-    _P2S_MEAN = (0.5, 0.5, 0.5)
-    _P2S_STD = (0.5, 0.5, 0.5)
 
     def __init__(self, cfg: Config | None = None) -> None:
         super().__init__()
-        from transformers import Pix2StructVisionModel
+        import numpy as np
+        from transformers import Pix2StructVisionModel, Pix2StructImageProcessor
         self.model = Pix2StructVisionModel.from_pretrained(self.HF_NAME)
         for p in self.model.parameters():
             p.requires_grad = False
-        self.renorm = _renorm_module(self._P2S_MEAN, self._P2S_STD)
+        self.processor = Pix2StructImageProcessor.from_pretrained(self.HF_NAME)
+        self._np = np
+        # Buffers for ImageNet denormalisation (tensor → [0,1] → PIL).
+        self.register_buffer("_in_mean",
+            torch.tensor(_IMAGENET_MEAN).view(1, 3, 1, 1))
+        self.register_buffer("_in_std",
+            torch.tensor(_IMAGENET_STD).view(1, 3, 1, 1))
 
     @property
     def descriptor_dim(self) -> int:
         return int(self.model.config.hidden_size)
 
+    def _to_pil_list(self, x: torch.Tensor):
+        """Denorm ImageNet tensor (B,3,H,W) → list of PIL Images."""
+        from PIL import Image as _Image
+        x01 = (x * self._in_std + self._in_mean).clamp(0, 1).cpu()
+        pils = []
+        for img in x01:
+            arr = (img.permute(1, 2, 0).numpy() * 255).astype(self._np.uint8)
+            pils.append(_Image.fromarray(arr))
+        return pils
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        device = x.device
         with torch.no_grad():
-            x = self.renorm(x)
-            # Pix2StructVisionModel expects ``flattened_patches`` (the model's
-            # internal HiRes patchifier) OR plain ``pixel_values`` in recent
-            # transformers. We pass pixel_values and let it handle patching.
-            out = self.model(pixel_values=x)
+            pils = self._to_pil_list(x)
+            inputs = self.processor(
+                images=pils, return_tensors="pt"
+            )
+            inputs = {k: v.to(device) for k, v in inputs.items()}
+            out = self.model(**inputs)
             feats = out.last_hidden_state.mean(dim=1).float()
         return F.normalize(feats, p=2, dim=-1)
 
