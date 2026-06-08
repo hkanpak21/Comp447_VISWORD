@@ -1,0 +1,24 @@
+\documentclass[varwidth,border=6pt]{standalone}
+
+\usepackage{booktabs}
+\usepackage[table]{xcolor}
+\usepackage{microtype}
+
+\begin{document}
+\small
+\begin{tabular}{lcc}
+\toprule
+Adapter Architecture & I-JEPA & CLIP \\
+\midrule
+Baseline (no adapter) & 0.009 & 0.008 \\
+Linear & 0.214 & \textbf{0.715} \\
+Low Rank ($r=16$) & 0.172 & 0.471 \\
+Low Rank ($r=64$) & 0.212 & 0.661 \\
+Low Rank ($r=256$) & 0.213 & \textbf{0.717} \\
+Bottleneck ($r=64$) & 0.202 & 0.666 \\
+Bottleneck ($r=256$) & 0.207 & 0.712 \\
+MLP ($h=2048$) & 0.213 & 0.709 \\
+Deep MLP ($h=2048$) & \textbf{0.219} & 0.637 \\
+\bottomrule
+\end{tabular}
+\end{document}
