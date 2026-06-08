@@ -115,31 +115,6 @@
 * **Pretraining Objective:** Predict the semantic BERT embeddings of the page text from only the unmasked visual context.
 * **Significance:** Forces the vision encoder to learn semantic text structures directly from visual layout and context, laying the groundwork for native-resolution document retrieval.
 
-```mermaid
-graph LR
-    %% Define Styles
-    classDef frozen fill:#1e293b,stroke:#475569,stroke-width:2px,color:#94a3b8;
-    classDef trainable fill:#7c3aed,stroke:#a78bfa,stroke-width:2px,color:#ffffff;
-    classDef data fill:#0891b2,stroke:#22d3ee,stroke-width:2px,color:#ffffff;
-    classDef loss fill:#b91c1c,stroke:#f87171,stroke-width:2px,color:#ffffff;
-
-    subgraph Visual_Pathway ["Visual Pathway (Trainable)"]
-        A[Input Image Crop]:::data --> B[Context Masking]:::data
-        B -->|Unmasked Patches| C[Context Encoder<br>ViT-H/14]:::trainable
-        C -->|Context Features| D[Predictor<br>Transformer]:::trainable
-        E[Text Mask Queries]:::trainable --> D
-    end
-
-    subgraph Text_Pathway ["Text Pathway (Frozen)"]
-        F[Page Lead Text]:::data --> G[BERT Encoder<br>Fully Frozen]:::frozen
-    end
-
-    D -->|Predicted Text Embs| H[Loss: Smooth L1]:::loss
-    G -->|Target Text Embs| H
-```
-
-
-
 ---
 
 # Slide 10: Main Focus: Ongoing Experiment - Native-Resolution Training Grid (6:45 - 7:30)
@@ -170,26 +145,30 @@ graph LR
 
 ---
 
-# Slide 12: Main Focus: Advanced Retrieval Architectures (8:15 - 8:45)
-## Multi-Vector & Multi-Scale Vision
-* **Two-Stream Global-Local Reader:**
-  * A two-stream visual pipeline designed to solve the trade-off between local legibility and global layout context.
-  * *Stream 1:* High-resolution native crops (490x490) for reading text.
-  * *Stream 2:* Heavily downsampled global overview (224x224) to maintain layout structure.
-* **Late Interaction (ColPali):**
-  * Evaluate state-of-the-art multi-vector models (ColPali) using MaxSim scoring.
-  * Test if single-vector models (SALAD) can reach multi-vector performance.
-
-[FIGURE: Two-Stream Global-Local Reader architecture diagram]
+# Slide 12: Limitations & Computational Challenges (8:15 - 8:45)
+## Core Bottlenecks in Native-Resolution Document Retrieval
+* **Compute & Memory Scaling:**
+  * Processing native 490x490 crops yields 1,225 patch tokens per crop (ViT-H/14).
+  * High memory footprint causes GPU OOM, requiring small batch sizes (e.g., 2 on A40) and gradient checkpointing.
+* **Shortcut Learning (Layout Confound):**
+  * Visual encoders easily cheat by memorizing unique document style fingerprints (margins, header geometries, whitespace distribution) rather than reading.
+* **Representation Capacity (Single vs. Multi-Vector):**
+  * Single-vector models (like SALAD) struggle to pack both localized legibility details and overall document structure into a single 128-dimensional embedding.
+* **Domain Transfer Gap:**
+  * Wikipedia screenshots are clean and structured; models face performance drops when transferring to noisy, real-world multi-column PDFs and scanned documents.
 
 ---
 
 # Slide 13: Future Research Agenda: Open Questions (8:45 - 9:30)
-## Agenda for the June 14 Final Report
-* **Q1. Feature Interpretability (SAE analysis):** Do features in SALAD/CLIP represent linguistic tokens (words/semantics) or only layout fingerprints (margins/headers)? Tested via Sparse Autoencoders.
-* **Q2. Platonic Alignment on Visual Text:** Does a pixel-only model align linearly with text-only models (BERT) when trained exclusively on text screens?
-* **Q3. Reading vs. Understanding:** Does the model perform basic OCR glyph-matching or higher-level semantic understanding? Evaluated via typographic attacks and perturbations.
-* **Q4. Learning Dynamics:** At what point during fine-tuning does the model transition from learning layout coordinates to learning to read text?
+## Roadmap for the June 14 Final Report
+* **Q1. Disentangling Features (SAE Analysis):**
+  * Train Sparse Autoencoders (SAEs) on backbone latents to isolate and visualize "layout-only" vs. "text-semantic" features.
+* **Q2. Platonic Alignment Testing:**
+  * Quantify the linear map alignment between the visual encoder and BERT. Do visual text embeddings align with native text embeddings?
+* **Q3. Legibility Robustness & Perturbation Attacks:**
+  * Stress-test models with typographic attacks (font changes, character jitter, blurring) to prove they are performing robust reading rather than layout memorization.
+* **Q4. Two-Stream Architectures:**
+  * Implement and evaluate a two-stream model (high-res local legible stream + low-res global layout overview stream) to scale token budgets.
 
 ---
 
