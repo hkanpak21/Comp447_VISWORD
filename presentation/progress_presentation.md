@@ -115,7 +115,76 @@
 * **Pretraining Objective:** Predict the semantic BERT embeddings of the page text from only the unmasked visual context.
 * **Significance:** Forces the vision encoder to learn semantic text structures directly from visual layout and context, laying the groundwork for native-resolution document retrieval.
 
-[FIGURE: Cross-Modal I-JEPA Text-Target Pretraining architecture diagram]
+```mermaid
+graph TD
+    %% Define Styles
+    classDef frozen fill:#1e293b,stroke:#475569,stroke-width:2px,color:#94a3b8;
+    classDef trainable fill:#7c3aed,stroke:#a78bfa,stroke-width:2px,color:#ffffff;
+    classDef data fill:#0891b2,stroke:#22d3ee,stroke-width:2px,color:#ffffff;
+    classDef loss fill:#b91c1c,stroke:#f87171,stroke-width:2px,color:#ffffff;
+
+    %% Data Inputs
+    subgraph Input_Data [Page Crop & Text Data]
+        Img[Full Page Screenshot Crop]:::data
+        RawText[Whole Page Body Text]:::data
+    end
+
+    %% Visual Pathway
+    Img --> Patches[Patchify: 14x14 patches]:::data
+    Patches --> Masking[Apply Context Masking]:::data
+    Masking --> ContextPatches[Unmasked Context Patches<br>N_ctxt tokens]:::data
+    
+    subgraph Context_Encoder [I-JEPA Context Encoder]
+        Encoder[ViT-H/14 Backbone<br>Last 4/32 Blocks Trainable]:::trainable
+    end
+    ContextPatches --> Encoder
+    Encoder --> ContextEmbs[Visual Context Embeddings<br>shape: B * nenc, N_ctxt, 1280]:::data
+
+    %% Text Pathway (Frozen)
+    RawText --> Truncate[Truncate to first 64 tokens]:::data
+    Truncate --> Tokenizer[BERT Tokenizer]:::data
+    Tokenizer --> InputIDs[Token Input IDs]:::data
+
+    subgraph Target_Encoder [Target Semantic Encoder]
+        BERT[BERT-base Encoder<br>Fully Frozen]:::frozen
+    end
+    InputIDs --> BERT
+    BERT --> BERTEmbs[Target BERT Embeddings<br>shape: B, T, 768]:::data
+
+    %% Predictor Pathway
+    ContextEmbs --> ProjIn[Predictor Projection Linear]:::trainable
+    ProjIn --> ContextTokens[Projected Context Tokens<br>dim: 384]:::data
+    
+    subgraph Pos_Embeds [Positional Embeddings]
+        Pos2D[2D Sincos Pos Embeds]:::frozen
+        Pos1D[1D Learnable Text Pos Embeds]:::trainable
+    end
+    ContextTokens & Pos2D --> Add2D[Add 2D Positional Embeds]:::data
+
+    MaskToken[Learnable Mask Tokens<br>shape: B * nenc, T, 384]:::trainable
+    MaskToken & Pos1D --> Add1D[Add 1D Positional Embeds]:::data
+
+    Add2D & Add1D --> Concat[Concatenate along Sequence<br>shape: B * nenc, N_ctxt + T, 384]:::data
+
+    subgraph Transformer_Predictor [Predictor Head]
+        PredictorBlocks[6x Transformer Blocks<br>Trainable]:::trainable
+        ProjOut[Projection Linear<br>Trainable]:::trainable
+    end
+
+    Concat --> PredictorBlocks
+    PredictorBlocks --> OutConcat[Output Representations]:::data
+    OutConcat --> Extract[Extract Target Positions<br>shape: B * nenc, T, 384]:::data
+    Extract --> ProjOut
+    ProjOut --> PredictedEmbs[Predicted Text Embeddings<br>shape: B * nenc, T, 768]:::data
+
+    %% Loss Calculation
+    BERTEmbs --> RepeatTargets[Repeat targets for nenc masks<br>shape: B * nenc, T, 768]:::data
+    PredictedEmbs & RepeatTargets --> SmoothL1[Smooth L1 Loss]:::loss
+    Tokenizer --> AttnMask[Attention Mask]:::data
+    AttnMask --> ApplyMask[Mask Padding Tokens]:::loss
+    ApplyMask --> SmoothL1
+```
+
 
 
 ---
