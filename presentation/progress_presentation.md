@@ -85,8 +85,20 @@
 ![Visual comparison of native resolution and downsized panels](figures/qualitative_resolution_comparison_1x4.png)
 
 ---
+# Slide 8: Main Focus: Intelligent Cropping & Line Snapping (5:00 - 5:45)
+## Preserving Text Semantics Across Crops
+* **The Slicing Artifact:** Naive sliding-window cropping slicing through midpoints of text lines cuts characters in half, producing fragmented tokens that disrupt visual parsing.
+* **The Text-Aware Solution (TextAwareCropper):**
+  * Computes vertical projection profiles (row ink fraction) to map page structure.
+  * Dynamically snaps vertical crop boundaries to the centers of whitespace gaps.
+  * Short crops are white-padded to native dimensions rather than stretched, keeping text scale consistent.
 
-# Slide 8: Main Focus: Re-Baselining the Grid & Bounds (5:00 - 5:45)
+![Intelligent Cropping line-snapping comparison](figures/intelligent_cropping_comparison.png)
+
+---
+
+
+# Slide 9: Main Focus: Re-Baselining the Grid & Bounds (5:45 - 6:30)
 ## Performance at Native Resolution
 * **The Perfect-Text Upper Bound:**
   * Mean-pooling BERT text embeddings directly from the page text.
@@ -114,7 +126,7 @@
 
 ---
 
-# Slide 9: Main Focus: Visual Document-Pretrained Encoders (5:45 - 6:30)
+# Slide 10: Main Focus: Visual Document-Pretrained Encoders (6:30 - 7:15)
 ## Evaluating Document AI Models Zero-Shot
 * **The Document-Pretrained Family:**
   * Evaluate visual encoders explicitly pretrained on documents or document OCR tasks.
@@ -133,7 +145,7 @@
 
 ---
 
-# Slide 10: Main Focus: Cross-Modal Pretraining - I-JEPA with Text Targets (6:30 - 7:30)
+# Slide 11: Main Focus: Cross-Modal Pretraining - I-JEPA with Text Targets (7:15 - 8:15)
 ## Predicting Language from Unmasked Image Context
 * **Input & Target Flow:**
   * **Frozen BERT Text Encoder:** Takes tokenized ground-truth body text of the screenshot page crop as input. Outputs semantic text embeddings `(B, T, 768)`. Completely frozen.
@@ -167,7 +179,7 @@ graph LR
 
 ---
 
-# Slide 11: Main Focus: Ongoing Experiment - Native-Resolution Training Grid (7:30 - 8:15)
+# Slide 12: Main Focus: Ongoing Experiment - Native-Resolution Training Grid (8:15 - 9:00)
 ## Probing High-Resolution Latent Emergence on Cluster
 * **The Goal:** Benchmark standard image-only pretraining against our cross-modal text-target pretraining, and evaluate retrieval head configurations.
 * **The Training Grid:**
@@ -181,7 +193,7 @@ graph LR
 
 ---
 
-# Slide 12: Main Focus: Confound Control via Title Masking (8:15 - 9:00)
+# Slide 13: Main Focus: Confound Control via Title Masking (9:00 - 9:45)
 ## Blocking Layout Shortcuts during Training
 * **The Goal:** Force the model to read the actual body text instead of exploiting spatial layout shortcuts (the "title layout cheat").
 * **Random Title Masking:**
@@ -205,7 +217,7 @@ graph LR
 
 ---
 
-# Slide 13: Research Limitations (9:00 - 9:30)
+# Slide 14: Research Limitations (9:45 - 10:15)
 ## Scope & Methodology Constraints
 
 * **Single Seed — No Within-Family Significance**
@@ -226,7 +238,7 @@ graph LR
 
 ---
 
-# Slide 14: Future Research Agenda: Open Questions (9:30 - 10:15)
+# Slide 15: Future Research Agenda: Open Questions (10:15 - 11:00)
 ## Roadmap for the June 14 Final Report
 * **Q1. Disentangling Features (SAE Analysis):**
   * Train Sparse Autoencoders (SAEs) on backbone latents to isolate and visualize "layout-only" vs. "text-semantic" features.
@@ -242,7 +254,7 @@ graph LR
 
 ---
 
-# Slide 15: Conclusion & Takeaways (10:15 - 10:45)
+# Slide 16: Conclusion & Takeaways (11:00 - 11:30)
 ## Summary of Work
 * **Phase 1 Recap:** Pretraining objective determines zero-shot retrieval. Contrastive dominates; image-only has latent text structure but exploits layout coordinates when fine-tuned.
 * **Phase 2 Contribution:** Resolution is the reading bottleneck. We introduced the legible 490x490 cropping protocol to enable true reading.
