@@ -58,6 +58,7 @@
             letter-spacing: -0.02em;
             background: var(--accent-gradient);
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
             display: flex;
             align-items: center;
@@ -202,6 +203,7 @@
             letter-spacing: -0.02em;
             background: linear-gradient(to right, #ffffff, #d1d5db);
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
         }
 
@@ -427,6 +429,7 @@
             line-height: 1.5;
             display: -webkit-box;
             -webkit-line-clamp: 5;
+            line-clamp: 5;
             -webkit-box-orient: vertical;
             overflow: hidden;
             gap: 0.5rem;
@@ -520,132 +523,145 @@
 
     <!-- Markdown source embedded as a fallback for offline/CORS usage -->
     <script id="markdownSource" type="text/markdown">
-# Slide 1: Can Vision Models Read? (0:00 - 0:45)
+# Slide 1: Can Vision Models Read? (0:00 - 0:30)
 ## Can Vision Models Read?
-### Probing Linguistic Structure via JEPA on Text Screenshots
+### A Study of Visual Document Retrieval and Latent Text Representations
 * **Authors:** Barış Cem Bakay, Halil İbrahim Kanpak
 * **Affiliation:** Department of Computer Engineering, Koç University
-* **Goal:** Investigate whether self-supervised and contrastive vision encoders learn linguistic structure and page layout directly from document images.
+* **Goal:** Present visual page retrieval benchmarks across vision pretrainings, investigate the layout shortcut confound, and scale self-supervised predictive encoders (I-JEPA) to native resolution.
 
 ---
 
-# Slide 2: Motivation (0:45 - 1:30)
-## Visual Document Retrieval vs. Text Pipelines
-* **The OCR Bottleneck:** Standard document retrieval relies on OCR + text encoders, discarding layout cues (headers, columns, tables), failing on degraded scans, and ignoring image queries.
-* **OCR-Free Visual Retrieval:** Processing page screenshots directly preserves layout and visual elements, but shifts the entire burden of "reading" to the vision encoder.
-* **Pretraining Paradigms:**
-  * *Image-Text Contrastive (CLIP, SigLIP):* Trained on web-scale image-caption pairs; known to read rendered text.
-  * *Image-Only Self-Supervised (DINOv2, I-JEPA):* No text supervision. Do they emerge with linguistic structure?
+# Slide 2: Motivation & Research Questions (0:30 - 1:15)
+## OCR-Free Visual Retrieval
+* **The Goal:** Bypass traditional text pipelines (OCR + text encoders) to retrieve document pages directly using page screenshots, preserving layout, figures, and formatting.
+* **Core Research Inquiries:**
+  * **Q1 (Zero-Shot Encoders):** Which vision pretrainings inherently align with visual text features zero-shot?
+  * **Q2 (Platonic Hypothesis):** Do vision space and text space align representationally as model scale grows?
+  * **Q3 (Unsupervised Reading):** Does image-only predictive pretraining (I-JEPA) encode latent linguistic features?
+  * **Q4 (The Shortcut Confound):** Do models actually read body text, or do they exploit layout cues (like titles)?
 
 ---
 
-# Slide 3: Research Questions (1:30 - 2:15)
-## Core Inquiries
-* **Q1. Zero-Shot Capability:** Which vision pretraining enables a model to retrieve the source page of a crop zero-shot?
-* **Q2. The Platonic Representation Hypothesis:** Does semantic text alignment correlate with retrieval performance across different encoders?
-* **Q3. Latent Structure in Image-Only Models:** Can predictive pretraining (I-JEPA) encode linguistic structures that are invisible without a change of basis?
-* **Q4. The Resolution Confound:** Does standard 224x224 resolution limit models to layout matching, and can native-resolution processing unlock true reading?
+# Slide 3: Phase 1 Recap: Zero-Shot & The Platonic Hypothesis (1:15 - 2:00)
+## Initial Findings (Progress Report Status)
+* **Zero-Shot Visual Retrieval (Protocol A, 2k pages):**
+  * Image-text contrastive models (CLIP, SigLIP) dominate zero-shot page retrieval (CLIP: R@10 = 0.779).
+  * Self-supervised and image-only models (DINOv2, I-JEPA) sit near chance levels zero-shot.
+* **Testing the Platonic Representation Hypothesis:**
+  * Measured mutual-kNN@10 alignment between vision features and BERT text embeddings.
+  * Contrastive features show strong text alignment (0.09 - 0.14); image-only features align poorly (0.007 - 0.027).
+  * **Spearman's \rho = 0.83** ($p = 0.04$) between text-alignment and retrieval recall, confirming that semantic alignment predicts retrieval success.
 
 ---
 
-# Slide 4: Experimental Setup & Protocols (2:15 - 3:00)
-## Evaluation Protocols A & B
-* **Evaluation Slice:** Held-out 2,000-page slice of Wikipedia screenshots.
-* **Protocol A (Page Retrieval):** 
-  * Gallery: One vector per page (mean of page crops).
-  * Query: A single page crop. Evaluates page re-identification.
-* **Protocol B (Cross-Set Transfer):**
-  * Gallery: Other crops of the same page in a pool with hard negatives.
-  * Evaluates transferability to different layout regions.
-* **Aggregation Heads:** Single-vector pooling, MLP (768 \rightarrow 512 \rightarrow 256), and SALAD optimal-transport aggregator (8,448-d).
+# Slide 4: Phase 1 Recap: Fine-Tuning & The Title Confound (2:00 - 2:45)
+## Shortcut Learning vs. LEACE Erasure
+* **The Fine-Tuning Paradox:** Fine-tuning DINOv2-SALAD-50k beats zero-shot CLIP, reaching **R@10 = 0.915**.
+* **Title-Blanking Experiment:** Blanking the top 15% (title region) of pages:
+  * Fine-Tuned DINOv2: Retrieval recall crashes by **-0.242** (0.915 \rightarrow 0.673).
+  * Zero-Shot CLIP: Recall increases by **+0.073** (0.779 \rightarrow 0.852).
+  * *Finding:* Fine-tuning teaches DINOv2 to overfit to spatial layout coordinates (titles), whereas CLIP learns translation-invariant text patterns.
+* **LEACE Causal Title-Erasure:** 
+  * Projecting out the top "title direction" axis in feature space boosts CLIP retrieval to **0.863** (beating blanking pixels!).
+  * Erasing it from DINOv2 has minimal effect, proving DINOv2 does not represent titles as a distinct linear feature.
 
 ---
 
-# Slide 5: The Legibility Bottleneck: 224 vs. 490 (3:00 - 3:45)
-## Restoring Native Resolution
-* **The Squashing Problem:** Phase 1 scaled 490x490 crops down to 224x224, shrinking characters by 2.19x. This rendered body text sub-pixel (illegible). 
-* **The Shortcut:** Under this bottleneck, models were forced to rely on global page layout or prominent headings, rather than reading fluent body text.
-* **Solution: Text-Aware Cropper:**
-  * Processes page crops at native 490x490 resolution (1,225 tokens per crop).
-  * Implements line-snapping heuristics to keep lines intact.
-  * Guarantees perfectly legible text inputs to the vision encoders.
+# Slide 5: Phase 1 Recap: I-JEPA's Latent Text Alignment (2:45 - 3:30)
+## Unlocking Unsupervised Text Representation
+* **The Representation Coordinate Problem:**
+  * I-JEPA features have zero-shot text-alignment near chance (R@10 = 0.015).
+  * However, is semantic text structure present but represented in the wrong basis?
+* **Linear Projection Adapter:**
+  * We trained a single linear projection (InfoNCE on 4,000 screenshot-title pairs) from I-JEPA to BERT space.
+  * Adapted I-JEPA text alignment jumped by **13x** to **R@10 = 0.197** (no encoder fine-tuning, no nonlinearities).
+  * *Conclusion:* Image-only predictive pretraining does learn text-aligned structure, but it is latent and requires an alignment adapter to recover.
 
 ---
 
-# Slide 6: Re-Baselining & Bounds at Native Resolution (3:45 - 4:45)
-## Results & Performance Upper Bounds
-* **Perfect-Text Upper Bound (BERT):** Mean-pooling BERT embeddings directly from the ground-truth text of the page yields **R@10 = 0.938**. This represents the text-only retrieval ceiling.
-* **Contrastive MAE Reader:** A strong custom baseline trained directly on MAE features to reconstruct/embed text, achieving **R@10 = 0.098**.
-* **Zero-Shot Baselines:**
-  * Contrastive models (CLIP, SigLIP) dominate zero-shot retrieval.
-  * Image-only models (DINOv2, I-JEPA) sit near chance levels zero-shot.
-  * **Document-Pretrained Family:** Swin-based Nougat gets **R@10 = 0.049**, showing that document pretraining alone does not guarantee zero-shot retrieval capability.
+# Slide 6: Main Focus: The Resolution Bottleneck & Cropping (3:30 - 4:30)
+## Shifting to Native Legibility (New Progress)
+* **The Scale-Down Confound:** Phase 1 evaluations scaled 490x490 page crops down to 224x224.
+  * This 2.19x shrink rendered body text sub-pixel (illegible to human and OCR models).
+  * *Implication:* Models in Phase 1 were structurally prevented from reading body text, forcing them to rely on title shortcuts.
+* **The Solution: Legible-Cropping Protocol:**
+  * Implemented a `TextAwareCropper` that processes page tiles at native 490x490 resolution (1,225 tokens per crop).
+  * Applies line-snapping heuristics to keep line boundaries intact.
+  * Ensures that characters are fully legible for reading.
 
 ---
 
-# Slide 7: The Platonic Representation Hypothesis (4:45 - 5:30)
-## Alignment Predicts Retrieval
-* **Mutual-kNN@10 Alignment:** Measures the spatial alignment between image encoders and a text encoder (BERT) on the same 2,000 pages.
-* **Alignment Scores:**
-  * Contrastive Encoders: Align with BERT at **0.09 - 0.14** mutual-kNN@10.
-  * Image-Only Encoders: Align poorly at **0.007 - 0.027**.
-* **Quantitative Correlation:**
-  * Spearman's \rho = 0.83 (p = 0.04) between text-alignment and zero-shot retrieval R@10.
-  * *Implication:* The Platonic Hypothesis holds. Models that learn to represent the semantic structure of text are those that excel at visual document retrieval.
+# Slide 7: Main Focus: Re-Baselining the Grid & Bounds (4:30 - 5:30)
+## Performance at Native Resolution
+* **The Perfect-Text Upper Bound:**
+  * Mean-pooling BERT text embeddings directly from the page text yields **R@10 = 0.938**.
+  * Represents the text-only retrieval ceiling.
+* **Contrastive MAE Reader Baseline:**
+  * A strong custom-trained baseline using MAE features to reconstruct/embed text.
+  * Reaches **R@10 = 0.098** at native resolution.
+* **Re-baselined Vision Encoders:**
+  * Evaluated standard backbones at 490x490 resolution.
+  * Contrastive vision encoders retain their dominance, establishing a clean baseline for text retrieval.
 
 ---
 
-# Slide 8: Fine-Tuning & The Layout Confound (5:30 - 6:30)
-## Shortcut Learning vs. Invariant Reading
-* **The Fine-Tuning Paradox:** Fine-tuning DINOv2-SALAD-50k yields **R@10 = 0.915**, exceeding zero-shot CLIP.
-* **Title-Blanking Experiment:** Painting the top 15% (title region) of the page white during evaluation:
-  * Fine-Tuned DINOv2: Crashes by **-0.242 R@10** (0.915 \rightarrow 0.673).
-  * Zero-Shot CLIP: Gains **+0.073 R@10** (0.779 \rightarrow 0.852).
-* **The Layout Cheat:** Fine-tuning teaches image-only models to bind page identity to spatial layout shortcuts (e.g., titles). Contrastive models (CLIP/SigLIP) focus on translation-invariant text patterns.
+# Slide 8: Main Focus: Visual Document-Pretrained Encoders (5:30 - 6:30)
+## Evaluating Document AI Models Zero-Shot
+* **The Document-Pretrained Family:**
+  * Evaluated visual encoders explicitly pretrained on documents or document OCR tasks.
+* **Nougat (Swin Transformer):**
+  * Reaches **R@10 = 0.049** zero-shot.
+  * Shows that even models trained on document layouts require explicit retrieval adaptation.
+* **Pix2Struct (Google):**
+  * Custom forward pass modification implemented using `Pix2StructImageProcessor` to bypass the default 224x224 input squashing.
+  * Zero-shot evaluation active on GPU node `ai26` to establish the zero-shot ceiling for document-reading models.
 
 ---
 
-# Slide 9: LEACE Causal Title-Erasure (6:30 - 7:30)
-## Surgically Erasing the Shortcut
-* **Isolating the Title Axis:** We calculate the difference vector \phi(orig) - \phi(blank) in feature space and extract the top PCA axis.
-* **Causal Projection (LEACE):** We project this "title direction" out of the features.
-* **Retrieval Recall (R@10) Comparison:**
-  * *CLIP:* 0.779 (Original) \rightarrow 0.823 (Blanking pixels) \rightarrow **0.863** (LEACE Erased).
-  * *DINOv2:* 0.058 \rightarrow 0.056 \rightarrow **0.068**.
-* **Interpretation:** 
-  * The title exists as a structured, linear axis in CLIP's representation. Erasing it surgically is more effective than removing the actual pixels.
-  * In DINOv2, the title direction is not linearly structured, confirming it does not represent titles as distinct text concepts.
+# Slide 9: Main Focus: Scaling I-JEPA to Native Resolution (6:30 - 7:30)
+## Probing High-Resolution Latent Emergence
+* **Hypothesis:** Under legible native resolution (490x490, 1,225 tokens), self-supervised predictive pretraining (I-JEPA) will naturally capture semantic text structure.
+* **The 4-GPU Cluster Training Grid:**
+  * Launched 4 parallel training runs using A40 GPUs, avoiding resource-contended nodes to guarantee completion.
+* **Experimental Matrix:**
+  * **Objective:** Image-Only pretraining vs. Text-Target (predicting body text tokens).
+  * **Aggregation Heads:** MLP (256-d) vs. SALAD (8,448-d) optimal-transport aggregator.
+  * *Goal:* Determine if predicting masked states at native resolution induces actual text-reading capabilities.
 
 ---
 
-# Slide 10: I-JEPA: Latent Alignment & Native Training (7:30 - 8:45)
-## Unlocking Predictive Pretraining
-* **Latent Text Alignment:** 
-  * I-JEPA features show poor zero-shot alignment (R@10 = 0.015).
-  * Training a single linear projection (InfoNCE on 4,000 screenshot-title pairs) into BERT space yields **R@10 = 0.197** (a 13x boost).
-  * *Finding:* Predictive pretraining encodes text structure, but in a different basis.
-* **Ongoing Native-Resolution I-JEPA Training:**
-  * Training I-JEPA at native 490x490 resolution (1,225 tokens) on 4 A40 GPUs.
-  * Comparing *Image-Only* vs. *Text-Target (Body)* pretraining objectives.
-  * Evaluating *MLP* vs. *SALAD* retrieval heads.
-  * Determining if predicting masked states can emerge with semantic reading capabilities.
+# Slide 10: Main Focus: Confound Control via Title Masking (7:30 - 8:30)
+## Blocking Layout Shortcuts during Training
+* **The Goal:** Force the model to read the actual body text instead of exploiting spatial layout shortcuts (the "title layout cheat").
+* **Random Title Masking:**
+  * Apply a random whiteout mask over the top 15% (title region) of page screenshots during fine-tuning.
+  * Eliminates the title layout fingerprint from the training distribution.
+* **Initial Verification:**
+  * Forces the model to extract and match semantic tokens from the body text.
+  * Prevents cross-set transfer performance drops.
 
 ---
 
-# Slide 11: Next Steps & Future Architectures (8:45 - 9:30)
-## Road Map
-* **Confound Control (Title Masking):** Randomly masking title regions during training to force the model to read the body text, preventing layout-based shortcut learning.
-* **Two-Stream Global Context:** Combining a high-res native crop (490x490) for reading with a low-res global overview (224x224) to maintain layout awareness.
-* **Late Interaction Evaluation:** Comparing single-vector retrieval against state-of-the-art multi-vector models (like ColPali) using MaxSim scoring.
+# Slide 11: Main Focus: Advanced Retrieval Architectures (8:30 - 9:30)
+## Multi-Vector & Multi-Scale Vision
+* **Two-Stream Global-Local Reader:**
+  * A two-stream visual pipeline designed to solve the trade-off between local legibility and global layout context.
+  * *Stream 1:* High-resolution native crops (490x490) for reading text.
+  * *Stream 2:* Heavily downsampled global overview (224x224) to maintain layout structure.
+* **Late Interaction (ColPali):**
+  * Evaluating state-of-the-art multi-vector models (ColPali) using MaxSim scoring.
+  * Testing if single-vector models (SALAD) can reach multi-vector performance.
 
 ---
 
-# Slide 12: Conclusion (9:30 - 10:00)
-## Key Takeaways
-* **Pretraining Objective Matters:** Image-text contrastive learning is crucial for zero-shot text retrieval. Image-only models sit near chance.
-* **The Platonic Correlation:** Vision-text representation alignment is a strong predictor of document retrieval success.
-* **Resolution is Key:** Processing at native 490x490 resolution is necessary to support actual reading over layout-based shortcut matching.
-* **Latent Semantics Exist:** Image-only predictive models (I-JEPA) encode linguistic structure, recoverable via a linear adapter, prompting our native resolution I-JEPA training grid.
+# Slide 12: Conclusion & Takeaways (9:30 - 10:00)
+## Summary of Work
+* **Phase 1 Recap:** Pretraining objective determines zero-shot retrieval. Contrastive dominates; image-only has latent text structure but exploits layout coordinates when fine-tuned.
+* **Phase 2 Contribution:** Resolution is the reading bottleneck. We introduced the legible 490x490 cropping protocol to enable true reading.
+* **Ongoing Work:** Re-baselined standard encoders (Nougat, MAE), and launched 4 parallel GPU runs to probe I-JEPA at native resolution.
+* **Future Vision:** Combining title masking (to block layout shortcuts) with two-stream networks and late interaction (ColPali) to build robust OCR-free page search.
+    </script>d.
     </script>
 
     <script>
