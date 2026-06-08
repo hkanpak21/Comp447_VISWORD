@@ -24,6 +24,9 @@ from visword.models.zeroshot import (
     ZeroShotMAE,
     ZeroShotPlainViT,
     ZeroShotSigLIP,
+    ZeroShotPix2Struct,
+    ZeroShotDonut,
+    ZeroShotNougat,
 )
 
 # name -> builder(cfg). Order = the grid's reporting order.
@@ -36,6 +39,10 @@ _ENCODERS: dict[str, Callable[[Config | None], nn.Module]] = {
     "random_vit": lambda cfg: ZeroShotPlainViT(cfg),
     "ijepa": lambda cfg: ZeroShotIJepa(cfg),
     "mae": lambda cfg: ZeroShotMAE(cfg),
+    # Doc-pretrained family (ticket 03) — OCR-free document encoders.
+    "pix2struct": lambda cfg: ZeroShotPix2Struct(cfg),
+    "donut": lambda cfg: ZeroShotDonut(cfg),
+    "nougat": lambda cfg: ZeroShotNougat(cfg),
 }
 
 #: Canonical grid order; ``ijepa`` is ViT-H/14 (not matched-arch — see zeroshot.py).

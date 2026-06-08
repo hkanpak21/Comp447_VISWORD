@@ -1,0 +1,38 @@
+# I-JEPA Text-Target (Body) backbone + MLP head — 490×490 native resolution (no downsampling)
+# Backbone: ijepa-text-target-all-blocks-ful_e27e (body-text I-JEPA, 90k, 490×490, text_source=text)
+# Head: MLP, last-4-blocks unfrozen, 30k pages
+# Consistent with backbone pretraining: body text was the BERT target
+experiment_name: ijepa-texttarget-mlp-30k-490
+
+model_kind: ijepa_finetune
+
+backbone:
+  arch: ijepa_vith14
+  feature_dim: 1280
+  num_trainable_blocks: 4
+  pretrained_checkpoint: /scratch/bbakay22/VISWORD/runs/2026-06-03_070502_acfc947c_ijepa-text-target-all-blocks-ful_e27e/checkpoints/best_phase1.pt
+
+cropper:
+  crop_size: 490
+  overlap: 0.0
+  min_text_ratio: 0.05
+  target_size: 490   # native resolution — no downsampling
+
+data:
+  num_train_samples: 30000
+  num_eval_samples: 2000
+
+train:
+  loss: multisim
+  k_per_page: 4
+  batch_size: 8    # A40 48GB — conservative for 1225-patch ViT-H crops
+  epochs: 3
+  lr_backbone: 5.0e-6
+  lr_head: 5.0e-4
+  eval_every_steps: 400
+  num_diag_batches: 3
+
+eval:
+  k_values: [1, 5, 10, 20]
+  phase1_max_pages: 2000
+  phase2_max_queries: 200

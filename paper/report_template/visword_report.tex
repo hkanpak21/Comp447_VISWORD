@@ -428,7 +428,7 @@ Backbone / Pretraining & Zero-Shot & MLP & SALAD \\
 \end{table}
 
 \begin{table}[t]
-\caption{Protocol-A retrieval R@10 under the Native Legible Protocol ($224 \to 224$, no downsampling) specifically comparing different I-JEPA pretraining configurations. Entries marked TBD indicate configurations not yet trained or evaluated at this resolution.}
+\caption{Protocol-A retrieval R@10 under the Native Legible Protocol ($490 \to 490$, no downsampling) specifically comparing different I-JEPA pretraining configurations. All variants are pretrained on 90k Wikipedia screenshots at native 490$\times$490 resolution with all 32 ViT-H/14 blocks unfrozen. Head fine-tunes use 30k pages. Entries marked TBD are from runs currently in progress.}
 \label{tab:native_legible_ijepa}
 \centering
 \small
@@ -436,10 +436,11 @@ Backbone / Pretraining & Zero-Shot & MLP & SALAD \\
 \toprule
 I-JEPA Variant & Zero-Shot & MLP & SALAD \\
 \midrule
-\rowcolor{cSSL} Baseline (Image-Only) & 0.054 & TBD & TBD \\
-\rowcolor{cSSL} Text-Target (Title) & TBD & TBD & TBD \\
-\rowcolor{cSSL} Text-Target (Body) & TBD & TBD & TBD \\
+\rowcolor{cSSL} Baseline (Image-Only) & 0.029 & TBD & TBD \\
+\rowcolor{cSSL} Text-Target (Body)$^\ddagger$ & 0.029 & TBD & TBD \\
 \bottomrule
+\multicolumn{4}{l}{\footnotesize $^\ddagger$~Backbone predicts frozen BERT representations of the page \emph{body} text.}\\
+\multicolumn{4}{l}{\footnotesize A title-targeted variant is deferred to future work.}
 \end{tabular}
 \end{table}
 

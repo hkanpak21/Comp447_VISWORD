@@ -347,8 +347,127 @@ class ZeroShotMAE(nn.Module):
         return F.normalize(feats, p=2, dim=-1)
 
 
+class ZeroShotPix2Struct(nn.Module):
+    """Frozen Pix2Struct-base vision encoder (Lee 2023, ICML Oral).
+
+    Pix2Struct is an encoder-decoder pretrained to parse masked webpage
+    screenshots into simplified HTML. We extract only the **patch encoder**
+    (``Pix2StructVisionModel``) and mean-pool its patch hidden states into a
+    single vector. This gives a 768-d embedding comparable to ViT-B baselines.
+
+    Pix2Struct uses its own normalisation (mean 0.5, std 0.5 per channel);
+    the dataset transform applies ImageNet stats so we inline-renormalise.
+    Input is resized to 224×224 by the dataset pipeline; the model's internal
+    patch extraction works at that resolution.
+    """
+
+    HF_NAME = "google/pix2struct-base"
+    # Pix2Struct preprocessor uses mean=0.5, std=0.5 (same as SigLIP).
+    _P2S_MEAN = (0.5, 0.5, 0.5)
+    _P2S_STD = (0.5, 0.5, 0.5)
+
+    def __init__(self, cfg: Config | None = None) -> None:
+        super().__init__()
+        from transformers import Pix2StructVisionModel
+        self.model = Pix2StructVisionModel.from_pretrained(self.HF_NAME)
+        for p in self.model.parameters():
+            p.requires_grad = False
+        self.renorm = _renorm_module(self._P2S_MEAN, self._P2S_STD)
+
+    @property
+    def descriptor_dim(self) -> int:
+        return int(self.model.config.hidden_size)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        with torch.no_grad():
+            x = self.renorm(x)
+            # Pix2StructVisionModel expects ``flattened_patches`` (the model's
+            # internal HiRes patchifier) OR plain ``pixel_values`` in recent
+            # transformers. We pass pixel_values and let it handle patching.
+            out = self.model(pixel_values=x)
+            feats = out.last_hidden_state.mean(dim=1).float()
+        return F.normalize(feats, p=2, dim=-1)
+
+
+class ZeroShotDonut(nn.Module):
+    """Frozen Donut-base vision encoder (Kim 2022, ECCV).
+
+    Donut (Document Understanding Transformer) is an OCR-free
+    encoder-decoder for document understanding. We extract only the Swin
+    Transformer vision encoder and mean-pool its last feature map into a
+    single vector. This gives a comparable dense document representation
+    without any OCR or text decoder involvement.
+
+    Donut uses its own mean/std stats; we inline-renormalise from ImageNet.
+    Input is resized to 224×224 — Donut's encoder is flexible via SwinTransformer.
+    """
+
+    HF_NAME = "naver-clova-ix/donut-base"
+    # Donut image normalisation: same as ImageNet (it uses the SwinT defaults).
+    _DONUT_MEAN = (0.485, 0.456, 0.406)
+    _DONUT_STD = (0.229, 0.224, 0.225)
+
+    def __init__(self, cfg: Config | None = None) -> None:
+        super().__init__()
+        from transformers import DonutSwinModel
+        self.model = DonutSwinModel.from_pretrained(self.HF_NAME)
+        for p in self.model.parameters():
+            p.requires_grad = False
+        # Donut uses ImageNet stats — no renorm needed; register identity.
+        self.renorm = _renorm_module(self._DONUT_MEAN, self._DONUT_STD)
+
+    @property
+    def descriptor_dim(self) -> int:
+        # SwinTransformer last-stage hidden dim.
+        return int(self.model.config.hidden_size)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        with torch.no_grad():
+            x = self.renorm(x)
+            out = self.model(pixel_values=x)
+            # last_hidden_state: (B, seq_len, hidden_size). Mean-pool spatial tokens.
+            feats = out.last_hidden_state.mean(dim=1).float()
+        return F.normalize(feats, p=2, dim=-1)
+
+
+class ZeroShotNougat(nn.Module):
+    """Frozen Nougat-base vision encoder (Blecher 2023).
+
+    Nougat is an OCR-free academic document parser (arXiv PDFs → Markdown).
+    It uses a Swin Transformer encoder identical in structure to Donut-base
+    (same HF architecture class, different weights). We mean-pool the last
+    hidden state of the encoder for a single dense page embedding.
+    """
+
+    HF_NAME = "facebook/nougat-base"
+    # Nougat uses standard ImageNet normalisation (inherited from SwinT).
+    _NOUGAT_MEAN = (0.485, 0.456, 0.406)
+    _NOUGAT_STD = (0.229, 0.224, 0.225)
+
+    def __init__(self, cfg: Config | None = None) -> None:
+        super().__init__()
+        from transformers import DonutSwinModel
+        # Nougat shares the DonutSwinModel architecture.
+        self.model = DonutSwinModel.from_pretrained(self.HF_NAME)
+        for p in self.model.parameters():
+            p.requires_grad = False
+        self.renorm = _renorm_module(self._NOUGAT_MEAN, self._NOUGAT_STD)
+
+    @property
+    def descriptor_dim(self) -> int:
+        return int(self.model.config.hidden_size)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        with torch.no_grad():
+            x = self.renorm(x)
+            out = self.model(pixel_values=x)
+            feats = out.last_hidden_state.mean(dim=1).float()
+        return F.normalize(feats, p=2, dim=-1)
+
+
 __all__ = [
     "ZeroShotDINOv2", "ZeroShotCLIPImage", "ZeroShotImageNetViT",
     "ZeroShotSigLIP", "ZeroShotSigLIPText", "ZeroShotPlainViT", "ZeroShotIJepa",
     "ZeroShotMAE", "DINOv2LinearProbe",
+    "ZeroShotPix2Struct", "ZeroShotDonut", "ZeroShotNougat",
 ]
