@@ -6,8 +6,18 @@
 * **Goal:** Present visual page retrieval benchmarks across vision pretrainings, investigate the layout shortcut confound, and scale self-supervised predictive encoders (I-JEPA) to native resolution.
 
 ---
+# Slide 2: Background: The Visual Document Paradigm (0:30 - 1:15)
+## OCR-Free Visual Document AI
+* **The Traditional Pipeline:** OCR Engine $\to$ Text Parser $\to$ Dense Text Encoder.
+  * *Fragility:* Sensitive to scan noise, layout complexity, multilingual fonts, and math notation. Discards visual/spatial layout hierarchy.
+* **The OCR-Free Visual Alternative:** Feed raw page screenshots directly to a vision encoder.
+  * *Advantage:* Preserves all formatting, tables, figures, fonts, and multilingual context in a single visual pass.
+* **The Core Question:** Do standard general-purpose vision encoders (pretrained on natural images or image-caption pairs) naturally learn to "read" visual text, or do they only match spatial layout fingerprints?
 
-# Slide 2: Motivation & Research Questions (0:30 - 1:15)
+---
+
+
+# Slide 3: Motivation & Research Questions (1:15 - 2:00)
 ## OCR-Free Visual Retrieval
 * **The Goal:** Bypass traditional text pipelines (OCR + text encoders) to retrieve document pages directly using page screenshots, preserving layout, figures, and formatting.
 * **Core Research Inquiries:**
@@ -21,7 +31,7 @@
 
 ---
 
-# Slide 3: Phase 1 Recap: Zero-Shot & The Platonic Hypothesis (1:15 - 2:00)
+# Slide 4: Phase 1 Recap: Zero-Shot & The Platonic Hypothesis (2:00 - 2:45)
 ## Initial Findings (Progress Report Status)
 * **Zero-Shot Visual Retrieval (Protocol A, 2k pages):**
   * Image-text contrastive models (CLIP, SigLIP) dominate zero-shot page retrieval.
@@ -35,7 +45,7 @@
 
 ---
 
-# Slide 4: Phase 1 Recap: Fine-Tuning & The Title Confound (2:00 - 2:45)
+# Slide 5: Phase 1 Recap: Fine-Tuning & The Title Confound (2:45 - 3:30)
 ## Shortcut Learning vs. LEACE Erasure
 * **The Fine-Tuning Paradox:** Fine-tuning DINOv2-SALAD beats zero-shot CLIP, but relies on layout shortcuts.
 * **Title-Blanking Experiment:** Blanking the top 15% (title region) of pages:
@@ -49,7 +59,7 @@
 
 ---
 
-# Slide 5: Phase 1 Recap: I-JEPA's Latent Text Alignment (2:45 - 3:30)
+# Slide 6: Phase 1 Recap: I-JEPA's Latent Text Alignment (3:30 - 4:15)
 ## Unlocking Unsupervised Text Representation
 * **The Representation Coordinate Problem:**
   * Image-only I-JEPA features have zero-shot text-alignment near chance.
@@ -62,7 +72,7 @@
 
 ---
 
-# Slide 6: Main Focus: The Resolution Bottleneck & Cropping (3:30 - 4:15)
+# Slide 7: Main Focus: The Resolution Bottleneck & Cropping (4:15 - 5:00)
 ## Shifting to Native Legibility (New Progress)
 * **The Scale-Down Confound:** Phase 1 evaluations scaled 490x490 page crops down to 224x224.
   * This 2.19x shrink rendered body text sub-pixel and illegible.
@@ -76,7 +86,7 @@
 
 ---
 
-# Slide 7: Main Focus: Re-Baselining the Grid & Bounds (4:15 - 5:00)
+# Slide 8: Main Focus: Re-Baselining the Grid & Bounds (5:00 - 5:45)
 ## Performance at Native Resolution
 * **The Perfect-Text Upper Bound:**
   * Mean-pooling BERT text embeddings directly from the page text.
@@ -104,7 +114,7 @@
 
 ---
 
-# Slide 8: Main Focus: Visual Document-Pretrained Encoders (5:00 - 5:45)
+# Slide 9: Main Focus: Visual Document-Pretrained Encoders (5:45 - 6:30)
 ## Evaluating Document AI Models Zero-Shot
 * **The Document-Pretrained Family:**
   * Evaluate visual encoders explicitly pretrained on documents or document OCR tasks.
@@ -123,7 +133,7 @@
 
 ---
 
-# Slide 9: Main Focus: Cross-Modal Pretraining - I-JEPA with Text Targets (5:45 - 6:45)
+# Slide 10: Main Focus: Cross-Modal Pretraining - I-JEPA with Text Targets (6:30 - 7:30)
 ## Predicting Language from Unmasked Image Context
 * **Input & Target Flow:**
   * **Frozen BERT Text Encoder:** Takes tokenized ground-truth body text of the screenshot page crop as input. Outputs semantic text embeddings `(B, T, 768)`. Completely frozen.
@@ -134,7 +144,7 @@
 
 ---
 
-# Slide 10: Main Focus: Ongoing Experiment - Native-Resolution Training Grid (6:45 - 7:30)
+# Slide 11: Main Focus: Ongoing Experiment - Native-Resolution Training Grid (7:30 - 8:15)
 ## Probing High-Resolution Latent Emergence on Cluster
 * **The Goal:** Benchmark standard image-only pretraining against our cross-modal text-target pretraining, and evaluate retrieval head configurations.
 * **The Training Grid:**
@@ -148,7 +158,7 @@
 
 ---
 
-# Slide 11: Main Focus: Confound Control via Title Masking (7:30 - 8:15)
+# Slide 12: Main Focus: Confound Control via Title Masking (8:15 - 9:00)
 ## Blocking Layout Shortcuts during Training
 * **The Goal:** Force the model to read the actual body text instead of exploiting spatial layout shortcuts (the "title layout cheat").
 * **Random Title Masking:**
@@ -172,7 +182,7 @@
 
 ---
 
-# Slide 12: Research Limitations (8:15 - 8:45)
+# Slide 13: Research Limitations (9:00 - 9:30)
 ## Scope & Methodology Constraints
 
 * **Single Seed — No Within-Family Significance**
@@ -193,7 +203,7 @@
 
 ---
 
-# Slide 13: Future Research Agenda: Open Questions (8:45 - 9:30)
+# Slide 14: Future Research Agenda: Open Questions (9:30 - 10:15)
 ## Roadmap for the June 14 Final Report
 * **Q1. Disentangling Features (SAE Analysis):**
   * Train Sparse Autoencoders (SAEs) on backbone latents to isolate and visualize "layout-only" vs. "text-semantic" features.
@@ -209,7 +219,7 @@
 
 ---
 
-# Slide 14: Conclusion & Takeaways (9:30 - 10:00)
+# Slide 15: Conclusion & Takeaways (10:15 - 10:45)
 ## Summary of Work
 * **Phase 1 Recap:** Pretraining objective determines zero-shot retrieval. Contrastive dominates; image-only has latent text structure but exploits layout coordinates when fine-tuned.
 * **Phase 2 Contribution:** Resolution is the reading bottleneck. We introduced the legible 490x490 cropping protocol to enable true reading.
