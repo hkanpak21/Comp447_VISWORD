@@ -407,7 +407,7 @@ basin. A multi-LR sweep is the proper next step but is deferred.
 \subsection{Native Legible Protocol (224 $\to$ 224)}
 \label{sec:native_legible}
 
-To analyze the models' capability of reading legible, native-resolution text (rather than downsampled headlines), we establish the Native Legible Protocol ($224 \to 224$). Here, Wikipedia screenshots are cropped without downsampling, keeping body text sharp and legible. Table~\ref{tab:native_legible} reports the results for the main baselines, while Table~\ref{tab:native_legible_ijepa} isolates different I-JEPA pretraining configurations. While the family ranking (contrastive vs.\ SSL) is preserved, we observe that zero-shot retrieval improves for all models since text templates are not distorted. The MAE baseline collapses under standard regression but recovers under InfoNCE contrastive training to yield $0.098$ R@10.
+To analyze the models' capability of reading legible, native-resolution text (rather than downsampled headlines), we establish the Native Legible Protocol ($224 \to 224$). Here, Wikipedia screenshots are cropped without downsampling, keeping body text sharp and legible. Table~\ref{tab:native_legible} reports the results for the main baselines, while Table~\ref{tab:native_legible_ijepa} isolates different I-JEPA pretraining configurations. While the family ranking (contrastive vs.\ SSL) is preserved, we observe that zero-shot retrieval improves for all models since text templates are not distorted. The MAE baseline collapses under standard regression but recovers under InfoNCE contrastive training to yield $0.098$ R@10, which further improves to $0.143$ when fine-tuned with random title-region masking.
 
 \begin{table}[t]
 \caption{Protocol-A retrieval R@10 under the Native Legible Protocol ($224 \to 224$, no downsampling) for different pretrainings. Under this protocol, body text is fully legible to the models. Missing entries indicate configurations not yet trained at this resolution.}
@@ -418,14 +418,24 @@ To analyze the models' capability of reading legible, native-resolution text (ra
 \toprule
 Backbone / Pretraining & Zero-Shot & MLP & SALAD \\
 \midrule
+\multicolumn{4}{l}{\textbf{Perfect-Text Upper Bounds (Linguistic Ceiling)}} \\
+BERT (mean-pool) & 0.938 & -- & -- \\
+BERT (CLS) & 0.747 & -- & -- \\
+\midrule
+\multicolumn{4}{l}{\textbf{Visual Models}} \\
 \rowcolor{cITC} CLIP ViT-B/16 & 0.736 & -- & -- \\
 \rowcolor{cITC} SigLIP ViT-B/16 & 0.697 & -- & -- \\
 \rowcolor{cSSL} DINOv2 ViT-B/14 (CLS) & 0.116 & -- & -- \\
+\rowcolor{cSUP} ImageNet ViT-B/16 & 0.084 & -- & -- \\
+\rowcolor{cSSL} I-JEPA ViT-H/14 & 0.054 & -- & -- \\
+\rowcolor{cRND} Plain ViT-B/16 & 0.042 & -- & -- \\
 \rowcolor{cSSL} MAE ViT-B/16 & 0.036 & 0.098$^\dagger$ & -- \\
+\rowcolor{cSSL} MAE ViT-B/16 (title-masked) & -- & 0.143$^\dagger$ & -- \\
 \bottomrule
 \multicolumn{4}{l}{\footnotesize $^\dagger$~Fine-tuned using InfoNCE contrastive training to BERT-mean.}
 \end{tabular}
 \end{table}
+
 
 \begin{table}[t]
 \caption{Protocol-A retrieval R@10 under the Native Legible Protocol ($490 \to 490$, no downsampling) specifically comparing different I-JEPA pretraining configurations. All variants are pretrained on 90k Wikipedia screenshots at native 490$\times$490 resolution with all 32 ViT-H/14 blocks unfrozen. Head fine-tunes use 30k pages. Entries marked TBD are from runs currently in progress.}
