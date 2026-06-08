@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Can Vision Models Read? - Presentation Viewer</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0b0b0f;
+            --card-bg: rgba(20, 20, 28, 0.6);
+            --card-border: rgba(255, 255, 255, 0.08);
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --accent-primary: #8b5cf6;
+            --accent-secondary: #06b6d4;
+            --accent-gradient: linear-gradient(135deg, #a78bfa 0%, #06b6d4 100%);
+            --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.5);
+            --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(139, 92, 246, 0.15) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(6, 182, 212, 0.12) 0%, transparent 45%);
+        }
+
+        /* Top Header */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem 2.5rem;
+            z-index: 10;
+        }
+
+        .logo {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 700;
+            font-size: 1.2rem;
+            letter-spacing: -0.02em;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .logo::before {
+            content: '';
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--accent-secondary);
+            box-shadow: 0 0 10px var(--accent-secondary);
+        }
+
+        /* Practice Timer */
+        .timer-container {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            background: rgba(30, 30, 40, 0.5);
+            border: 1px solid var(--card-border);
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            backdrop-filter: blur(8px);
+            font-family: 'Fira Code', monospace;
+            font-size: 0.95rem;
+        }
+
+        .timer-icon {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #10b981;
+            box-shadow: 0 0 8px #10b981;
+        }
+
+        .timer-icon.pulsing {
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.3); opacity: 0.5; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .timer-controls {
+            display: flex;
+            gap: 0.5rem;
+            margin-left: 0.5rem;
+            border-left: 1px solid rgba(255, 255, 255, 0.1);
+            padding-left: 0.5rem;
+        }
+
+        .timer-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: var(--transition-smooth);
+        }
+
+        .timer-btn:hover {
+            color: var(--text-main);
+        }
+
+        /* Main Workspace */
+        main {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 0 2rem;
+            position: relative;
+        }
+
+        /* Slide Deck Container */
+        .slide-deck {
+            width: 100%;
+            max-width: 1100px;
+            height: 620px;
+            perspective: 1500px;
+            position: relative;
+        }
+
+        /* Standard Slide Card */
+        .slide {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 24px;
+            padding: 3.5rem 4.5rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            gap: 1.5rem;
+            box-shadow: var(--shadow-lg);
+            backdrop-filter: blur(20px);
+            opacity: 0;
+            transform: scale(0.95) translateY(20px);
+            pointer-events: none;
+            transition: opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+                        transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow-y: auto;
+        }
+
+        .slide.active {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+            pointer-events: auto;
+        }
+
+        .slide.prev {
+            transform: scale(0.9) translateX(-100px);
+            opacity: 0;
+        }
+
+        .slide.next {
+            transform: scale(0.9) translateX(100px);
+            opacity: 0;
+        }
+
+        /* Slide Content Styling */
+        .slide-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            padding-bottom: 1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .slide-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 2.2rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            background: linear-gradient(to right, #ffffff, #d1d5db);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .slide-time-tag {
+            font-family: 'Fira Code', monospace;
+            font-size: 0.85rem;
+            color: var(--accent-secondary);
+            background: rgba(6, 182, 212, 0.1);
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            border: 1px solid rgba(6, 182, 212, 0.2);
+        }
+
+        .slide-body {
+            font-size: 1.15rem;
+            line-height: 1.7;
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+        }
+
+        .slide-body h2 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--accent-primary);
+            margin-bottom: 0.25rem;
+        }
+
+        .slide-body h3 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.25rem;
+            font-weight: 500;
+            color: var(--accent-secondary);
+            margin-bottom: 0.25rem;
+        }
+
+        .slide-body ul {
+            list-style: none;
+            padding-left: 0.5rem;
+        }
+
+        .slide-body li {
+            position: relative;
+            padding-left: 1.75rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .slide-body li::before {
+            content: '→';
+            position: absolute;
+            left: 0;
+            color: var(--accent-secondary);
+            font-weight: 600;
+        }
+
+        .slide-body li ul {
+            margin-top: 0.5rem;
+            padding-left: 0.5rem;
+        }
+
+        .slide-body li ul li::before {
+            content: '•';
+            color: var(--accent-primary);
+            font-size: 1.2rem;
+            left: 5px;
+            top: -2px;
+        }
+
+        .slide-body strong {
+            color: #ffffff;
+            font-weight: 600;
+        }
+
+        .slide-body code {
+            font-family: 'Fira Code', monospace;
+            background: rgba(255, 255, 255, 0.06);
+            padding: 0.15rem 0.4rem;
+            border-radius: 6px;
+            font-size: 0.95em;
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            color: #f43f5e;
+        }
+
+        /* Presentation Controls Footer */
+        footer {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            padding: 1.5rem 2.5rem 2rem 2.5rem;
+            z-index: 10;
+        }
+
+        .progress-bar-container {
+            width: 100%;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background: var(--accent-gradient);
+            box-shadow: 0 0 8px rgba(139, 92, 246, 0.5);
+            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .control-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-buttons {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .btn {
+            background: rgba(30, 30, 40, 0.6);
+            border: 1px solid var(--card-border);
+            color: var(--text-main);
+            padding: 0.6rem 1.2rem;
+            border-radius: 12px;
+            cursor: pointer;
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.9rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: var(--transition-smooth);
+            backdrop-filter: blur(8px);
+        }
+
+        .btn:hover:not(:disabled) {
+            background: rgba(139, 92, 246, 0.2);
+            border-color: var(--accent-primary);
+            transform: translateY(-2px);
+        }
+
+        .btn:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        .btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: var(--accent-gradient);
+            border: none;
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+        }
+
+        .btn-primary:hover {
+            box-shadow: 0 6px 16px rgba(139, 92, 246, 0.5);
+        }
+
+        .slide-counter {
+            font-family: 'Fira Code', monospace;
+            font-size: 0.95rem;
+            color: var(--text-muted);
+            background: rgba(255, 255, 255, 0.04);
+            padding: 0.4rem 0.8rem;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.02);
+        }
+
+        .view-toggle {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        /* Grid View Layout (Overview Mode) */
+        body.grid-mode {
+            overflow: auto;
+            height: auto;
+        }
+
+        body.grid-mode main {
+            padding: 2rem;
+            align-items: flex-start;
+        }
+
+        body.grid-mode .slide-deck {
+            height: auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 2rem;
+            max-width: 1400px;
+        }
+
+        body.grid-mode .slide {
+            position: relative;
+            width: 100%;
+            height: 250px;
+            opacity: 1;
+            transform: none !important;
+            pointer-events: auto;
+            padding: 1.5rem;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        body.grid-mode .slide:hover {
+            border-color: var(--accent-primary);
+            box-shadow: 0 10px 20px rgba(139, 92, 246, 0.15);
+            transform: translateY(-5px) !important;
+        }
+
+        body.grid-mode .slide-title {
+            font-size: 1.3rem;
+        }
+
+        body.grid-mode .slide-body {
+            font-size: 0.85rem;
+            line-height: 1.5;
+            display: -webkit-box;
+            -webkit-line-clamp: 5;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            gap: 0.5rem;
+        }
+
+        body.grid-mode .slide-body h2,
+        body.grid-mode .slide-body h3 {
+            font-size: 0.95rem;
+        }
+
+        body.grid-mode footer {
+            position: sticky;
+            bottom: 0;
+            background: rgba(11, 11, 15, 0.9);
+            backdrop-filter: blur(10px);
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        /* Instructions HUD */
+        .keyboard-hint {
+            position: absolute;
+            bottom: 6rem;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            background: rgba(30, 30, 40, 0.3);
+            padding: 0.3rem 0.8rem;
+            border-radius: 12px;
+            pointer-events: none;
+            transition: opacity 0.3s;
+            border: 1px solid rgba(255, 255, 255, 0.03);
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .key-badge {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-main);
+            padding: 0.1rem 0.3rem;
+            border-radius: 4px;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.75rem;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="logo">VISWORD</div>
+        <div class="timer-container" title="Practice Countdown (10-minute presentation)">
+            <div class="timer-icon pulsing" id="timerIndicator"></div>
+            <span id="timerDisplay">10:00</span>
+            <div class="timer-controls">
+                <button class="timer-btn" id="startStopBtn">Start</button>
+                <button class="timer-btn" id="resetBtn">Reset</button>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <div class="slide-deck" id="slideDeck">
+            <!-- Slides dynamically parsed & loaded here -->
+            <div style="display:flex; justify-content:center; align-items:center; width:100%; height:100%;">
+                <p style="color:var(--text-muted)">Loading presentation...</p>
+            </div>
+        </div>
+        <div class="keyboard-hint" id="keyboardHint">
+            <span>Navigate: <span class="key-badge">Space</span> / <span class="key-badge">→</span> / <span class="key-badge">←</span></span>
+            <span>|</span>
+            <span>Grid Mode: <span class="key-badge">G</span></span>
+        </div>
+    </main>
+
+    <footer>
+        <div class="progress-bar-container">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
+        <div class="control-row">
+            <div class="view-toggle">
+                <button class="btn" id="deckViewBtn" disabled>Slide Deck</button>
+                <button class="btn" id="gridViewBtn">Grid Overview</button>
+            </div>
+            <div class="slide-counter" id="slideCounter">Slide 1 / 1</div>
+            <div class="nav-buttons">
+                <button class="btn" id="prevBtn" disabled>← Previous</button>
+                <button class="btn btn-primary" id="nextBtn">Next →</button>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Markdown source embedded as a fallback for offline/CORS usage -->
+    <script id="markdownSource" type="text/markdown">
+# Slide 1: Can Vision Models Read? (0:00 - 0:45)
+## Can Vision Models Read?
+### Probing Linguistic Structure via JEPA on Text Screenshots
+* **Authors:** Barış Cem Bakay, Halil İbrahim Kanpak
+* **Affiliation:** Department of Computer Engineering, Koç University
+* **Goal:** Investigate whether self-supervised and contrastive vision encoders learn linguistic structure and page layout directly from document images.
+
+---
+
+# Slide 2: Motivation (0:45 - 1:30)
+## Visual Document Retrieval vs. Text Pipelines
+* **The OCR Bottleneck:** Standard document retrieval relies on OCR + text encoders, discarding layout cues (headers, columns, tables), failing on degraded scans, and ignoring image queries.
+* **OCR-Free Visual Retrieval:** Processing page screenshots directly preserves layout and visual elements, but shifts the entire burden of "reading" to the vision encoder.
+* **Pretraining Paradigms:**
+  * *Image-Text Contrastive (CLIP, SigLIP):* Trained on web-scale image-caption pairs; known to read rendered text.
+  * *Image-Only Self-Supervised (DINOv2, I-JEPA):* No text supervision. Do they emerge with linguistic structure?
+
+---
+
+# Slide 3: Research Questions (1:30 - 2:15)
+## Core Inquiries
+* **Q1. Zero-Shot Capability:** Which vision pretraining enables a model to retrieve the source page of a crop zero-shot?
+* **Q2. The Platonic Representation Hypothesis:** Does semantic text alignment correlate with retrieval performance across different encoders?
+* **Q3. Latent Structure in Image-Only Models:** Can predictive pretraining (I-JEPA) encode linguistic structures that are invisible without a change of basis?
+* **Q4. The Resolution Confound:** Does standard 224x224 resolution limit models to layout matching, and can native-resolution processing unlock true reading?
+
+---
+
+# Slide 4: Experimental Setup & Protocols (2:15 - 3:00)
+## Evaluation Protocols A & B
+* **Evaluation Slice:** Held-out 2,000-page slice of Wikipedia screenshots.
+* **Protocol A (Page Retrieval):** 
+  * Gallery: One vector per page (mean of page crops).
+  * Query: A single page crop. Evaluates page re-identification.
+* **Protocol B (Cross-Set Transfer):**
+  * Gallery: Other crops of the same page in a pool with hard negatives.
+  * Evaluates transferability to different layout regions.
+* **Aggregation Heads:** Single-vector pooling, MLP (768 \rightarrow 512 \rightarrow 256), and SALAD optimal-transport aggregator (8,448-d).
+
+---
+
+# Slide 5: The Legibility Bottleneck: 224 vs. 490 (3:00 - 3:45)
+## Restoring Native Resolution
+* **The Squashing Problem:** Phase 1 scaled 490x490 crops down to 224x224, shrinking characters by 2.19x. This rendered body text sub-pixel (illegible). 
+* **The Shortcut:** Under this bottleneck, models were forced to rely on global page layout or prominent headings, rather than reading fluent body text.
+* **Solution: Text-Aware Cropper:**
+  * Processes page crops at native 490x490 resolution (1,225 tokens per crop).
+  * Implements line-snapping heuristics to keep lines intact.
+  * Guarantees perfectly legible text inputs to the vision encoders.
+
+---
+
+# Slide 6: Re-Baselining & Bounds at Native Resolution (3:45 - 4:45)
+## Results & Performance Upper Bounds
+* **Perfect-Text Upper Bound (BERT):** Mean-pooling BERT embeddings directly from the ground-truth text of the page yields **R@10 = 0.938**. This represents the text-only retrieval ceiling.
+* **Contrastive MAE Reader:** A strong custom baseline trained directly on MAE features to reconstruct/embed text, achieving **R@10 = 0.098**.
+* **Zero-Shot Baselines:**
+  * Contrastive models (CLIP, SigLIP) dominate zero-shot retrieval.
+  * Image-only models (DINOv2, I-JEPA) sit near chance levels zero-shot.
+  * **Document-Pretrained Family:** Swin-based Nougat gets **R@10 = 0.049**, showing that document pretraining alone does not guarantee zero-shot retrieval capability.
+
+---
+
+# Slide 7: The Platonic Representation Hypothesis (4:45 - 5:30)
+## Alignment Predicts Retrieval
+* **Mutual-kNN@10 Alignment:** Measures the spatial alignment between image encoders and a text encoder (BERT) on the same 2,000 pages.
+* **Alignment Scores:**
+  * Contrastive Encoders: Align with BERT at **0.09 - 0.14** mutual-kNN@10.
+  * Image-Only Encoders: Align poorly at **0.007 - 0.027**.
+* **Quantitative Correlation:**
+  * Spearman's \rho = 0.83 (p = 0.04) between text-alignment and zero-shot retrieval R@10.
+  * *Implication:* The Platonic Hypothesis holds. Models that learn to represent the semantic structure of text are those that excel at visual document retrieval.
+
+---
+
+# Slide 8: Fine-Tuning & The Layout Confound (5:30 - 6:30)
+## Shortcut Learning vs. Invariant Reading
+* **The Fine-Tuning Paradox:** Fine-tuning DINOv2-SALAD-50k yields **R@10 = 0.915**, exceeding zero-shot CLIP.
+* **Title-Blanking Experiment:** Painting the top 15% (title region) of the page white during evaluation:
+  * Fine-Tuned DINOv2: Crashes by **-0.242 R@10** (0.915 \rightarrow 0.673).
+  * Zero-Shot CLIP: Gains **+0.073 R@10** (0.779 \rightarrow 0.852).
+* **The Layout Cheat:** Fine-tuning teaches image-only models to bind page identity to spatial layout shortcuts (e.g., titles). Contrastive models (CLIP/SigLIP) focus on translation-invariant text patterns.
+
+---
+
+# Slide 9: LEACE Causal Title-Erasure (6:30 - 7:30)
+## Surgically Erasing the Shortcut
+* **Isolating the Title Axis:** We calculate the difference vector \phi(orig) - \phi(blank) in feature space and extract the top PCA axis.
+* **Causal Projection (LEACE):** We project this "title direction" out of the features.
+* **Retrieval Recall (R@10) Comparison:**
+  * *CLIP:* 0.779 (Original) \rightarrow 0.823 (Blanking pixels) \rightarrow **0.863** (LEACE Erased).
+  * *DINOv2:* 0.058 \rightarrow 0.056 \rightarrow **0.068**.
+* **Interpretation:** 
+  * The title exists as a structured, linear axis in CLIP's representation. Erasing it surgically is more effective than removing the actual pixels.
+  * In DINOv2, the title direction is not linearly structured, confirming it does not represent titles as distinct text concepts.
+
+---
+
+# Slide 10: I-JEPA: Latent Alignment & Native Training (7:30 - 8:45)
+## Unlocking Predictive Pretraining
+* **Latent Text Alignment:** 
+  * I-JEPA features show poor zero-shot alignment (R@10 = 0.015).
+  * Training a single linear projection (InfoNCE on 4,000 screenshot-title pairs) into BERT space yields **R@10 = 0.197** (a 13x boost).
+  * *Finding:* Predictive pretraining encodes text structure, but in a different basis.
+* **Ongoing Native-Resolution I-JEPA Training:**
+  * Training I-JEPA at native 490x490 resolution (1,225 tokens) on 4 A40 GPUs.
+  * Comparing *Image-Only* vs. *Text-Target (Body)* pretraining objectives.
+  * Evaluating *MLP* vs. *SALAD* retrieval heads.
+  * Determining if predicting masked states can emerge with semantic reading capabilities.
+
+---
+
+# Slide 11: Next Steps & Future Architectures (8:45 - 9:30)
+## Road Map
+* **Confound Control (Title Masking):** Randomly masking title regions during training to force the model to read the body text, preventing layout-based shortcut learning.
+* **Two-Stream Global Context:** Combining a high-res native crop (490x490) for reading with a low-res global overview (224x224) to maintain layout awareness.
+* **Late Interaction Evaluation:** Comparing single-vector retrieval against state-of-the-art multi-vector models (like ColPali) using MaxSim scoring.
+
+---
+
+# Slide 12: Conclusion (9:30 - 10:00)
+## Key Takeaways
+* **Pretraining Objective Matters:** Image-text contrastive learning is crucial for zero-shot text retrieval. Image-only models sit near chance.
+* **The Platonic Correlation:** Vision-text representation alignment is a strong predictor of document retrieval success.
+* **Resolution is Key:** Processing at native 490x490 resolution is necessary to support actual reading over layout-based shortcut matching.
+* **Latent Semantics Exist:** Image-only predictive models (I-JEPA) encode linguistic structure, recoverable via a linear adapter, prompting our native resolution I-JEPA training grid.
+    </script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            let currentSlide = 0;
+            let slidesData = [];
+            let timerInterval = null;
+            let timeRemaining = 600; // 10 minutes in seconds
+            let timerRunning = false;
+
+            // Elements
+            const deck = document.getElementById('slideDeck');
+            const counter = document.getElementById('slideCounter');
+            const progress = document.getElementById('progressBar');
+            const prevBtn = document.getElementById('prevBtn');
+            const nextBtn = document.getElementById('nextBtn');
+            const gridViewBtn = document.getElementById('gridViewBtn');
+            const deckViewBtn = document.getElementById('deckViewBtn');
+            const timerDisplay = document.getElementById('timerDisplay');
+            const startStopBtn = document.getElementById('startStopBtn');
+            const resetBtn = document.getElementById('resetBtn');
+            const timerIndicator = document.getElementById('timerIndicator');
+            const keyboardHint = document.getElementById('keyboardHint');
+
+            // Parse Markdown function
+            function parseMarkdown(mdText) {
+                const slidesRaw = mdText.split(/---+\s*/);
+                return slidesRaw.map((slideRaw, idx) => {
+                    const lines = slideRaw.trim().split('\n');
+                    let title = `Slide ${idx + 1}`;
+                    let timeTag = '';
+                    let bodyHtml = '';
+                    let inList = false;
+
+                    // Extract slide metadata and contents
+                    lines.forEach(line => {
+                        line = line.trim();
+                        if (!line) return;
+
+                        if (line.startsWith('# ')) {
+                            // slide title + timing e.g. # Slide 1: Can Vision Models Read? (0:00 - 0:45)
+                            const match = line.match(/# (Slide \d+:?.*?)\s*(\(.*?\))?$/);
+                            if (match) {
+                                title = match[1];
+                                timeTag = match[2] ? match[2].replace(/[()]/g, '') : '';
+                            } else {
+                                title = line.substring(2);
+                            }
+                        } else if (line.startsWith('## ')) {
+                            bodyHtml += `<h2>${parseInlineMarkup(line.substring(3))}</h2>`;
+                        } else if (line.startsWith('### ')) {
+                            bodyHtml += `<h3>${parseInlineMarkup(line.substring(4))}</h3>`;
+                        } else if (line.startsWith('* ') || line.startsWith('- ')) {
+                            if (!inList) {
+                                bodyHtml += '<ul>';
+                                inList = true;
+                            }
+                            bodyHtml += `<li>${parseInlineMarkup(line.substring(2))}</li>`;
+                        } else {
+                            if (inList) {
+                                bodyHtml += '</ul>';
+                                inList = false;
+                            }
+                            // Check for sub-bullets (simplistic check for leading spaces before split)
+                            bodyHtml += `<p>${parseInlineMarkup(line)}</p>`;
+                        }
+                    });
+
+                    if (inList) {
+                        bodyHtml += '</ul>';
+                    }
+
+                    return { title, timeTag, bodyHtml };
+                });
+            }
+
+            function parseInlineMarkup(text) {
+                // Math replacements
+                text = text.replace(/\\rightarrow/g, '&rarr;')
+                           .replace(/\\rho/g, '&rho;')
+                           .replace(/\\phi/g, '&phi;');
+                
+                // Bold
+                text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                
+                // Inline code
+                text = text.replace(/`(.*?)`/g, '<code>$1</code>');
+                
+                return text;
+            }
+
+            // Load and build slides
+            function initPresentation() {
+                // Look for actual markdown file first, fallback to script tag
+                const mdSourceElement = document.getElementById('markdownSource');
+                const markdown = mdSourceElement.textContent;
+                
+                // We will attempt to fetch the original file in the background if possible
+                // (This succeeds when served via http.server, fails on local file:// CORS)
+                fetch('progress_presentation.md')
+                    .then(response => {
+                        if (response.ok) return response.text();
+                        throw new Error('Not local server');
+                    })
+                    .then(text => {
+                        console.log('Successfully loaded progress_presentation.md dynamically.');
+                        renderSlides(parseMarkdown(text));
+                    })
+                    .catch(err => {
+                        console.log('Using embedded template fallback (offline mode/CORS).');
+                        renderSlides(parseMarkdown(markdown));
+                    });
+            }
+
+            function renderSlides(parsedSlides) {
+                slidesData = parsedSlides;
+                deck.innerHTML = '';
+                
+                slidesData.forEach((s, idx) => {
+                    const slideDiv = document.createElement('div');
+                    slideDiv.className = `slide ${idx === 0 ? 'active' : 'next'}`;
+                    slideDiv.id = `slide-${idx}`;
+                    
+                    slideDiv.innerHTML = `
+                        <div class="slide-header">
+                            <span class="slide-title">${s.title}</span>
+                            ${s.timeTag ? `<span class="slide-time-tag">${s.timeTag}</span>` : ''}
+                        </div>
+                        <div class="slide-body">
+                            ${s.bodyHtml}
+                        </div>
+                    `;
+                    
+                    // In grid mode click on a slide jumps to it
+                    slideDiv.addEventListener('click', () => {
+                        if (document.body.classList.contains('grid-mode')) {
+                            goToSlide(idx);
+                            toggleGridView(false);
+                        }
+                    });
+                    
+                    deck.appendChild(slideDiv);
+                });
+
+                updateControls();
+            }
+
+            // Navigation functions
+            function updateControls() {
+                if (slidesData.length === 0) return;
+                
+                counter.textContent = `Slide ${currentSlide + 1} / ${slidesData.length}`;
+                const pct = (currentSlide / (slidesData.length - 1)) * 100;
+                progress.style.width = `${pct}%`;
+
+                prevBtn.disabled = currentSlide === 0;
+                nextBtn.disabled = currentSlide === slidesData.length - 1;
+                
+                // Highlight next slide in the navigation buttons
+                if (currentSlide === slidesData.length - 1) {
+                    nextBtn.textContent = 'Finish';
+                } else {
+                    nextBtn.textContent = 'Next →';
+                }
+            }
+
+            function goToSlide(idx) {
+                if (idx < 0 || idx >= slidesData.length) return;
+                
+                const prevSlide = currentSlide;
+                currentSlide = idx;
+
+                const allSlides = document.querySelectorAll('.slide');
+                allSlides.forEach((slide, i) => {
+                    slide.className = 'slide';
+                    if (i === currentSlide) {
+                        slide.classList.add('active');
+                    } else if (i < currentSlide) {
+                        slide.classList.add('prev');
+                    } else {
+                        slide.classList.add('next');
+                    }
+                });
+
+                updateControls();
+            }
+
+            function nextSlide() {
+                if (currentSlide < slidesData.length - 1) {
+                    goToSlide(currentSlide + 1);
+                }
+            }
+
+            function prevSlide() {
+                if (currentSlide > 0) {
+                    goToSlide(currentSlide - 1);
+                }
+            }
+
+            // Grid view toggle
+            function toggleGridView(forceGrid) {
+                const isGrid = forceGrid !== undefined ? forceGrid : !document.body.classList.contains('grid-mode');
+                
+                if (isGrid) {
+                    document.body.classList.add('grid-mode');
+                    gridViewBtn.disabled = true;
+                    deckViewBtn.disabled = false;
+                    keyboardHint.style.opacity = '0';
+                } else {
+                    document.body.classList.remove('grid-mode');
+                    gridViewBtn.disabled = false;
+                    deckViewBtn.disabled = true;
+                    keyboardHint.style.opacity = '1';
+                    goToSlide(currentSlide); // Refresh positioning layout
+                }
+            }
+
+            // Timer management
+            function formatTime(sec) {
+                const m = Math.floor(sec / 60).toString().padStart(2, '0');
+                const s = (sec % 60).toString().padStart(2, '0');
+                return `${m}:${s}`;
+            }
+
+            function startTimer() {
+                if (timerRunning) return;
+                timerRunning = true;
+                startStopBtn.textContent = 'Pause';
+                timerIndicator.classList.add('pulsing');
+                timerIndicator.style.background = '#10b981';
+                timerIndicator.style.boxShadow = '0 0 8px #10b981';
+
+                timerInterval = setInterval(() => {
+                    if (timeRemaining > 0) {
+                        timeRemaining--;
+                        timerDisplay.textContent = formatTime(timeRemaining);
+                        
+                        // Warn when under 1 minute
+                        if (timeRemaining < 60) {
+                            timerIndicator.style.background = '#f43f5e';
+                            timerIndicator.style.boxShadow = '0 0 10px #f43f5e';
+                        }
+                    } else {
+                        clearInterval(timerInterval);
+                        timerRunning = false;
+                        startStopBtn.textContent = 'Start';
+                        timerIndicator.classList.remove('pulsing');
+                        alert('Time is up! Let\'s finish the presentation.');
+                    }
+                }, 1000);
+            }
+
+            function stopTimer() {
+                if (!timerRunning) return;
+                clearInterval(timerInterval);
+                timerRunning = false;
+                startStopBtn.textContent = 'Resume';
+                timerIndicator.classList.remove('pulsing');
+                timerIndicator.style.background = '#eab308';
+                timerIndicator.style.boxShadow = '0 0 8px #eab308';
+            }
+
+            function resetTimer() {
+                stopTimer();
+                timeRemaining = 600;
+                timerDisplay.textContent = formatTime(timeRemaining);
+                startStopBtn.textContent = 'Start';
+                timerIndicator.style.background = '#10b981';
+                timerIndicator.style.boxShadow = '0 0 8px #10b981';
+            }
+
+            // Event Listeners
+            prevBtn.addEventListener('click', prevSlide);
+            nextBtn.addEventListener('click', nextSlide);
+            gridViewBtn.addEventListener('click', () => toggleGridView(true));
+            deckViewBtn.addEventListener('click', () => toggleGridView(false));
+
+            startStopBtn.addEventListener('click', () => {
+                if (timerRunning) {
+                    stopTimer();
+                } else {
+                    startTimer();
+                }
+            });
+
+            resetBtn.addEventListener('click', resetTimer);
+
+            // Keyboard navigation
+            document.addEventListener('keydown', (e) => {
+                if (document.body.classList.contains('grid-mode')) {
+                    if (e.key === 'g' || e.key === 'G' || e.key === 'Escape') {
+                        toggleGridView(false);
+                    }
+                    return;
+                }
+
+                switch(e.key) {
+                    case 'ArrowRight':
+                    case ' ':
+                        nextSlide();
+                        break;
+                    case 'ArrowLeft':
+                    case 'Backspace':
+                        prevSlide();
+                        break;
+                    case 'g':
+                    case 'G':
+                        toggleGridView(true);
+                        break;
+                }
+            });
+
+            // Initialize
+            initPresentation();
+        });
+    </script>
+</body>
+</html>
