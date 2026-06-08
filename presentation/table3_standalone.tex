@@ -1,0 +1,42 @@
+\documentclass[varwidth,border=6pt]{standalone}
+
+\usepackage{booktabs}
+\usepackage[table]{xcolor}
+\usepackage{microtype}
+
+% Same family colours as the main paper
+\definecolor{cITC}{HTML}{D9E8F4}
+\definecolor{cSSL}{HTML}{E2F0DE}
+\definecolor{cSUP}{HTML}{F8E1DD}
+\definecolor{cRND}{HTML}{ECECEC}
+\definecolor{cFT}{HTML}{FFF1C2}
+
+\begin{document}
+\small
+\begin{tabular}{lccc}
+\toprule
+Backbone / Pretraining & R@1 & R@10 & gap \\
+\midrule
+\multicolumn{4}{l}{\textbf{Perfect-Text Upper Bounds}} \\
+BERT (mean-pool) & -- & 0.938 & $+0.198$ \\
+BERT (CLS)       & -- & 0.747 & $+0.176$ \\
+\midrule
+\multicolumn{4}{l}{\textbf{Image--text contrastive (zero-shot)}} \\
+\rowcolor{cITC} CLIP ViT-B/16   & \textbf{0.567} & \textbf{0.736} & $+0.168$ \\
+\rowcolor{cITC} SigLIP ViT-B/16 & 0.521 & 0.697 & $+0.095$ \\
+\midrule
+\multicolumn{4}{l}{\textbf{Image-only self-supervised (zero-shot)}} \\
+\rowcolor{cSSL} DINOv2 ViT-B/14 (CLS) & 0.041 & 0.116 & $+0.033$ \\
+\rowcolor{cSSL} I-JEPA ViT-H/14       & 0.015 & 0.054 & $+0.012$ \\
+\rowcolor{cSSL} MAE ViT-B/16 (frozen) & 0.009 & 0.036 & $+0.001$ \\
+\midrule
+\multicolumn{4}{l}{\textbf{Supervised / Random (zero-shot)}} \\
+\rowcolor{cSUP} ImageNet ViT-B/16 & 0.026 & 0.084 & $+0.015$ \\
+\rowcolor{cRND} Plain ViT-B/16    & 0.009 & 0.042 & $+0.002$ \\
+\midrule
+\multicolumn{4}{l}{\textbf{MAE Reader (InfoNCE $\to$ BERT-mean, 6 ep.)}} \\
+\rowcolor{cFT} Contrastive            & -- & 0.098 & $+0.318$ \\
+\rowcolor{cFT} + title-region masking & -- & \textbf{0.143} & $+0.404$ \\
+\bottomrule
+\end{tabular}
+\end{document}

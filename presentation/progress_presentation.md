@@ -172,17 +172,24 @@
 
 ---
 
-# Slide 12: Limitations & Computational Challenges (8:15 - 8:45)
-## Core Bottlenecks in Native-Resolution Document Retrieval
-* **Compute & Memory Scaling:**
-  * Processing native 490x490 crops yields 1,225 patch tokens per crop (ViT-H/14).
-  * High memory footprint causes GPU OOM, requiring small batch sizes (e.g., 2 on A40) and gradient checkpointing.
-* **Shortcut Learning (Layout Confound):**
-  * Visual encoders easily cheat by memorizing unique document style fingerprints (margins, header geometries, whitespace distribution) rather than reading.
-* **Representation Capacity (Single vs. Multi-Vector):**
-  * Single-vector models (like SALAD) struggle to pack both localized legibility details and overall document structure into a single 128-dimensional embedding.
-* **Domain Transfer Gap:**
-  * Wikipedia screenshots are clean and structured; models face performance drops when transferring to noisy, real-world multi-column PDFs and scanned documents.
+# Slide 12: Research Limitations (8:15 - 8:45)
+## Scope & Methodology Constraints
+
+* **Single Seed — No Within-Family Significance**
+  * All fine-tunes are single-seed. Cross-family gaps are large enough to survive noise (smallest gap ~0.09 R@10), but within-family comparisons (e.g., CLIP+SALAD vs. CLIP+MLP) cannot be considered statistically reliable without multi-seed reruns.
+
+* **Small Evaluation Pool (P = 2,000)**
+  * The gallery is deliberately held small for fast iteration; numbers are not directly comparable to industrial-scale retrieval (10⁵–10⁶ pages). R@k values will differ at scale.
+
+* **Forced Cropping — Body Text Remains Sub-Pixel**
+  * Feeding a full page at 224² shrinks body text to ~1–2 pixels (illegible), forcing us to tile pages into crops; this preserves readable text scale but sacrifices global page context.
+
+* **Wikipedia Only — Clean & Structured Domain**
+  * All training and evaluation is on Wikipedia screenshots, which share a consistent layout template. Generalization to noisy, multi-column, or handwritten documents (arXiv PDFs, scanned books) is untested.
+
+* **Compute Constraints — Incomplete Sweeps**
+  * Several experiments are still in progress or deferred: full-backbone I-JEPA fine-tunes at native resolution, multi-LR sweeps for CLIP, and larger memory-bank negatives for the MAE reader. Compute limits (T4 nodes, batch size ≤ 2 on A40 at 490×490) forced early stopping on some configurations.
+
 
 ---
 
@@ -193,7 +200,7 @@
 * **Q2. Scaling the MAE Reader:**
   * Probe the limits of the MAE reader by unfreezing more/all backbone blocks and using larger negative sampler banks to break the ~0.098 recall plateau.
 * **Q3. High-Frequency Autoencoder Front-End (E7):**
-  * Integrate a frequency-aware or scale-aware visual front-end (e.g., Scale-MAE) to preserve legibility without token size blowup.
+  * Integrate a frequency-aware or scale-aware visual front-end (e.g., Scale-MAE) to super-resolve or preserve text legibility without the token-count explosion of native-resolution patches.
 * **Q4. Transfer Generalization to arXiv PDFs (E10):**
   * Evaluate how well the models fine-tuned on Wikipedia generalize to multi-column academic PDF page structures.
 * **Q5. Visual Document Question Answering (E11):**
