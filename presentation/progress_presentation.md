@@ -108,15 +108,15 @@
 
 # Slide 9: Main Focus: Cross-Modal Pretraining - I-JEPA with Text Targets (5:45 - 6:45)
 ## Predicting Language from Unmasked Image Context
-* **Pretraining Objective:** Replace standard visual feature prediction with a cross-modal (text-target) objective during I-JEPA pretraining.
-* **How it works:**
-  * The context encoder processes unmasked screenshot patches.
-  * The predictor takes context patch representations and mask query tokens (with 1D positional embeddings for text).
-  * It predicts the semantic embeddings (BERT) of the text rendered in the masked visual regions.
-* **Pretrained Backbone:** Pretrain a ViT-H/14 backbone on Wikipedia screenshots with native-resolution body text targets.
-* **Significance:** Forces the vision encoder to learn semantic text structures directly from visual context, laying the groundwork for native-resolution document retrieval.
+* **Input & Target Flow:**
+  * **Frozen BERT Text Encoder:** Takes tokenized ground-truth body text of the screenshot page crop as input. Outputs semantic text embeddings `(B, T, 768)`. Completely frozen.
+  * **I-JEPA Context Visual Encoder:** Takes only unmasked visual patches of the screenshot crop. Processes via ViT-H/14 backbone (unfrozen/trainable during pretraining).
+  * **Transformer Predictor:** Takes concatenated context visual tokens (with 2D positional embeddings) and target query tokens (learnable mask tokens + 1D text positional embeddings). Fully trainable.
+* **Pretraining Objective:** Predict the semantic BERT embeddings of the page text from only the unmasked visual context.
+* **Significance:** Forces the vision encoder to learn semantic text structures directly from visual layout and context, laying the groundwork for native-resolution document retrieval.
 
 [FIGURE: Cross-Modal I-JEPA Text-Target Pretraining architecture diagram]
+
 
 ---
 
