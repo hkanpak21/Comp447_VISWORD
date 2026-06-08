@@ -68,6 +68,18 @@
   * Training a simple linear projection adapter maps I-JEPA features into BERT text space.
   * Adapted I-JEPA text alignment improves by 13x, showing that image-only predictive pretraining does learn latent text structures.
 
+| Adapter Architecture | I-JEPA (R@10) | CLIP (R@10) |
+| :--- | :---: | :---: |
+| Baseline (no adapter) | 0.009 | 0.008 |
+| **Linear** | 0.214 | **0.715** |
+| Low Rank ($r=16$) | 0.172 | 0.471 |
+| Low Rank ($r=64$) | 0.212 | 0.661 |
+| Low Rank ($r=256$) | 0.213 | **0.717** |
+| Bottleneck ($r=64$) | 0.202 | 0.666 |
+| Bottleneck ($r=256$) | 0.207 | 0.712 |
+| MLP ($h=2048$) | 0.213 | 0.709 |
+| **Deep MLP ($h=2048$)** | **0.219** | 0.637 |
+
 [FIGURE: Diagram of the Linear Projection Adapter from I-JEPA visual features to BERT text space]
 
 ---
