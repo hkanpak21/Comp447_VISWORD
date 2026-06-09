@@ -1,0 +1,74 @@
+{
+  "rows": [
+    {
+      "idx": 0,
+      "docid": "1000",
+      "title": "Hercule Poirot",
+      "image_path": "blobs/0000000.png",
+      "text_path": "texts/0000000.txt"
+    },
+    {
+      "idx": 1,
+      "docid": "10000",
+      "title": "Eiffel",
+      "image_path": "blobs/0000001.png",
+      "text_path": "texts/0000001.txt"
+    },
+    {
+      "idx": 2,
+      "docid": "1000005",
+      "title": "Glucono delta-lactone",
+      "image_path": "blobs/0000002.png",
+      "text_path": "texts/0000002.txt"
+    },
+    {
+      "idx": 3,
+      "docid": "100001",
+      "title": "Breydon Water",
+      "image_path": "blobs/0000003.png",
+      "text_path": "texts/0000003.txt"
+    },
+    {
+      "idx": 4,
+      "docid": "10000148",
+      "title": "William Arbuckle Reid",
+      "image_path": "blobs/0000004.png",
+      "text_path": "texts/0000004.txt"
+    },
+    {
+      "idx": 5,
+      "docid": "10000218",
+      "title": "Khalsa Diwan Society Vancouver",
+      "image_path": "blobs/0000005.png",
+      "text_path": "texts/0000005.txt"
+    },
+    {
+      "idx": 6,
+      "docid": "10000228",
+      "title": "Julien Leparoux",
+      "image_path": "blobs/0000006.png",
+      "text_path": "texts/0000006.txt"
+    },
+    {
+      "idx": 7,
+      "docid": "10000242",
+      "title": "Rod Rohrich",
+      "image_path": "blobs/0000007.png",
+      "text_path": "texts/0000007.txt"
+    },
+    {
+      "idx": 8,
+      "docid": "10000292",
+      "title": "Organized crime in Minneapolis",
+      "image_path": "blobs/0000008.png",
+      "text_path": "texts/0000008.txt"
+    },
+    {
+      "idx": 9,
+      "docid": "10000337",
+      "title": "Williston station",
+      "image_path": "blobs/0000009.png",
+      "text_path": "texts/0000009.txt"
+    }
+  ]
+}
