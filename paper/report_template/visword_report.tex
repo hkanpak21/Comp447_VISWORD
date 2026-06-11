@@ -407,7 +407,7 @@ basin. A multi-LR sweep is the proper next step but is deferred.
 \subsection{Native Legible Protocol (224 $\to$ 224)}
 \label{sec:native_legible}
 
-To analyze the models' capability of reading legible, native-resolution text (rather than downsampled headlines), we establish the Native Legible Protocol ($224 \to 224$). Here, Wikipedia screenshots are cropped without downsampling, keeping body text sharp and legible. Table~\ref{tab:native_legible} reports the results for the main baselines, while Table~\ref{tab:native_legible_ijepa} isolates different I-JEPA pretraining configurations. While the family ranking (contrastive vs.\ SSL) is preserved, we observe that zero-shot retrieval improves for all models since text templates are not distorted. The MAE baseline collapses under standard regression but recovers under InfoNCE contrastive training to yield $0.098$ R@10, which further improves to $0.143$ when fine-tuned with random title-region masking.
+To analyze the models' capability of reading legible, native-resolution text (rather than downsampled headlines), we establish the Native Legible Protocol ($224 \to 224$). Here, Wikipedia screenshots are cropped without downsampling, keeping body text sharp and legible. Table~\ref{tab:native_legible} reports the results for the main baselines, while Table~\ref{tab:native_legible_ijepa} isolates different I-JEPA pretraining configurations. While the family ranking (contrastive vs.\ SSL) is preserved, we observe that zero-shot retrieval improves for all models since text templates are not distorted. The MAE baseline \cite{he2022mae} collapses under standard regression but recovers under InfoNCE contrastive training to yield $0.098$ R@10, which further improves to $0.143$ when fine-tuned with random title-region masking (\S\ref{sec:mae_reader}).
 
 \begin{table}[t]
 \caption{Protocol-A retrieval under the Native Legible Protocol ($224 \to 224$, no downsampling). Encoders are grouped by pretraining family. ``gap'' is same-page minus diff-page mean cosine similarity.
@@ -464,6 +464,129 @@ I-JEPA Variant & Zero-Shot & MLP & SALAD \\
 \multicolumn{4}{l}{\footnotesize A title-targeted variant is deferred to future work.}
 \end{tabular}
 \end{table}
+
+\subsection{Teaching a non-reader to read: the MAE reader}
+\label{sec:mae_reader}
+
+Frozen MAE is the weakest encoder in
+Table~\ref{tab:native_legible} (R@10~$=$~0.036, statistically at
+the random-init floor, sim-gap $+0.001$): pixel-reconstruction
+pretraining yields a near-collapsed feature space on document
+crops. This makes it the cleanest testbed for the question
+\emph{can a non-reader be taught to read?} All experiments below
+use legible native-scale crops produced by a line-gap-snapping
+cropper ($\sim$21.8 crops/page versus 4.0 under the
+$490{\to}224$ shrink) and the same leave-one-out
+crop$\rightarrow$page protocol on the 2\,000-page disjoint slice.
+
+\textbf{Regression collapses.} We first fine-tune the last four
+ViT blocks plus a projection head (28.9\,M trainable) to regress
+pooled MAE features onto the frozen BERT[CLS] embedding of the
+page \emph{body} (Smooth-L1, 20\,k pages). Training converges
+cleanly (loss $3{\times}10^{-4}$) yet retrieval barely moves:
+R@10 $=$~0.039 versus 0.036 frozen, with sim-gap 0.010. The loss
+is minimised by predicting the tight centroid of the BERT[CLS]
+targets --- average proximity without the per-page structure
+retrieval needs.
+
+\textbf{Two diagnostics isolate the failure.} (i)~A
+\emph{perfect-text upper bound} (Table~\ref{tab:native_legible}):
+retrieving with the ground-truth body text itself re-identifies
+pages at R@10 $=$~0.747 (BERT[CLS]) and 0.938 (mean-pool), so the
+regression \emph{target} is highly discriminative --- the failure
+is the reader, not the target. (ii)~Attention placement: the
+fraction of last-layer CLS$\rightarrow$patch attention mass on
+ink (non-white) patches is 0.627 frozen and 0.627 after the
+regression fine-tune --- the fine-tune moved the head toward the
+target centroid without changing where the encoder looks.
+
+\textbf{A contrastive objective fixes the collapse.} Replacing
+regression with InfoNCE between each crop embedding and its
+page's mean-pool BERT-body anchor (in-batch negatives) makes
+centroid-prediction a losing strategy: the model must score its
+own page above the negatives. R@10 rises to 0.098 (6 epochs, 39
+negatives) with sim-gap 0.318 --- genuine page separation.
+Adding random title-region masking during fine-tuning (top 15\,\%
+whiteout, $p{=}0.5$) lifts the reader further to
+R@10~$=$~\textbf{0.143} (sim-gap 0.404), a $4\times$ improvement
+over frozen MAE (Figure~\ref{fig:reader_prog}).
+
+\textbf{Data is not the bottleneck.} Scaling the contrastive
+fine-tune from 20\,k to 80\,k pages ($4\times$) leaves R@10
+unchanged (0.095 vs.\ 0.098): the reader plateaus. The remaining
+gap to CLIP (0.736) and the perfect-text ceiling (0.938) is
+attributable to the MAE backbone's reading capacity, the
+parameter-efficient last-4-block fine-tune, and the in-batch
+negative count --- not to training-data quantity.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.95\columnwidth]{figures/fig_v1_reader_progression.png}
+\caption{Teaching a non-reader to read. Page-level R@10 on the
+2\,000-page gallery for the MAE reader variants, against zero-shot
+CLIP and the perfect-text ceiling. Regression to BERT[CLS]
+collapses to the target centroid; InfoNCE restores page
+separation; random title-masking adds confound control
+\emph{and} acts as augmentation.}
+\label{fig:reader_prog}
+\end{figure}
+
+\subsection{Title-blanking at legible resolution: the confound vanishes}
+\label{sec:legible_blank}
+
+The title-region pathology of Table~\ref{tab:blank_protA} ---
+fine-tuned checkpoints losing up to 0.29 R@10 when the top of the
+page is erased --- was measured under the $490{\to}224$ shrink,
+where the title was the only legible text. We repeat the
+intervention under the Native Legible Protocol, blanking the top
+25\,\% of every page (the region containing the title and the
+shared Wikipedia chrome) at evaluation time
+(Table~\ref{tab:legible_blank}).
+
+\begin{table}[t]
+\caption{Protocol-A R@10 under the Native Legible Protocol with
+the top 25\,\% of every page blanked at eval time. Every encoder
+--- and both trained readers --- \emph{improves}; no model
+fingerprints the title region at legible resolution. Row colours
+as in Table~\ref{tab:native_legible}.}
+\label{tab:legible_blank}
+\centering
+\small
+\begin{tabular}{lccc}
+\toprule
+Encoder & orig.\ R@10 & b-25 R@10 & $\Delta$ \\
+\midrule
+\rowcolor{cITC} CLIP ViT-B/16    & 0.736 & 0.819 & $+0.082$ \\
+\rowcolor{cITC} SigLIP ViT-B/16  & 0.697 & 0.792 & $+0.095$ \\
+\rowcolor{cSSL} DINOv2 (CLS)     & 0.116 & 0.142 & $+0.026$ \\
+\rowcolor{cSUP} ImageNet ViT-B/16 & 0.084 & 0.108 & $+0.023$ \\
+\rowcolor{cSSL} I-JEPA ViT-H/14  & 0.054 & 0.068 & $+0.014$ \\
+\rowcolor{cRND} Plain ViT-B/16   & 0.042 & 0.055 & $+0.012$ \\
+\rowcolor{cSSL} MAE ViT-B/16     & 0.036 & 0.047 & $+0.011$ \\
+\midrule
+\rowcolor{cFT} MAE reader (contrastive) & 0.097 & 0.110 & $+0.013$ \\
+\rowcolor{cFT} MAE reader (+title-mask) & 0.143 & 0.176 & $+0.033$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The sign flips relative to the Phase-1 fine-tunes: blanking now
+\emph{helps every encoder}, and the gain scales with reading
+ability (contrastive readers $+0.08$--$0.10$; the floor models
+$+0.01$). Two facts explain the direction. First, none of the
+models --- including both fine-tuned readers --- depends on the
+title region, so removing it costs nothing. Second, the top strip
+is dominated by the shared Wikipedia template (logo, search bar,
+navigation), a non-discriminative signal common to every page;
+including it dilutes the page-mean gallery vectors toward a
+common template vector, and removing it un-dilutes precisely the
+models with the most genuine content signal. The layout-fingerprint
+failure mode that motivated this study is therefore a property of
+the \emph{illegible} training distribution, not of fine-tuning per
+se: given legible body text and a body-text objective, trained
+readers do not adopt the title shortcut. Random title-masking
+during training retains its role as a guard --- and doubles as
+augmentation, providing the best reader (0.143).
 
 \subsection{Vision-to-vision adapter capacity}
 \label{sec:adapter_vv}
@@ -737,11 +860,22 @@ $\Delta$R@10 $=0.093$, well outside typical jitter), but
 within-family comparisons (CLIP-SALAD vs.\ CLIP-MLP) need
 multi-seed reruns. Pool size $P{=}2000$ is small versus industrial
 $10^5$--$10^6$; numbers are within-table comparable, not cross-paper.
-At $224^2$ input, body text is sub-pixel, so ``reading'' here means
-heading-level text plus layout, not fluent content. The I-JEPA
+Under the original $490{\to}224$ protocol, body text is sub-pixel,
+so ``reading'' there means heading-level text plus layout, not
+fluent content; the Native Legible Protocol
+(\S\ref{sec:native_legible}) removes this confound, but at a cost:
+tiling pages into native-scale crops ($\sim$21.8 per page versus
+4.0) multiplies encoding cost and sacrifices global page context,
+since no single crop sees the whole layout. All training and
+evaluation use Wikipedia screenshots, which share one clean,
+consistent template; generalisation to noisy, multi-column, or
+scanned documents (e.g.\ arXiv PDFs) is untested. The I-JEPA
 adapter R@10 $=$~0.197 is evidence of latent alignment, not a
 practical recipe; matching CLIP-level retrieval would need a
-non-linear adapter and larger paired-data training.
+non-linear adapter and larger paired-data training. Likewise the
+MAE reader's 0.143 demonstrates that a non-reader backbone can be
+taught genuine page separation, not that it is competitive with
+contrastively pretrained encoders.
 
 \section{Conclusion}
 \label{sec:conclusions}
@@ -768,6 +902,24 @@ near-chance to R@10 $=$~0.197, indicating image-only predictive
 features encode latent text-aligned structure that is not
 zero-shot accessible but is recoverable by a low-capacity linear
 projection.
+
+Re-running the grid under the Native Legible Protocol --- crops at
+native pixel scale, so body text is actually readable --- shows
+the family ordering is not an artifact of illegibility: contrastive
+encoders still dominate and image-only encoders remain near the
+floor. Against a perfect-text ceiling of R@10 $=$~0.938, zero-shot
+CLIP (0.736) already matches the BERT[CLS] readout of the
+ground-truth text (0.747), so the remaining headroom is reading
+quality rather than layout exploitation. Frozen MAE, the weakest
+encoder ($0.036 \approx$ random), can be taught to read: CLS
+regression collapses to the target centroid, but an InfoNCE
+objective against BERT-body anchors restores genuine page
+separation (0.098), and random title-masking during fine-tuning
+yields the best reader (0.143) while guarding against the title
+shortcut. At legible resolution the title-blanking intervention
+\emph{helps} every encoder and both trained readers, indicating
+the Phase-1 layout-fingerprint pathology is a property of
+illegible inputs rather than of fine-tuning itself.
 
 \bibliography{visword_report}
 \bibliographystyle{comp547}
