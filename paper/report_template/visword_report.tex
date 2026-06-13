@@ -262,6 +262,40 @@ hard negatives (crops of unrelated pages).}
 \label{fig:bench}
 \end{figure}
 
+\subsection{Text encoder specification}
+\label{sec:bert}
+
+Every text-side computation in this paper --- the I-JEPA
+text-target (\S\ref{sec:native_legible}), the MAE reader's
+regression and contrastive targets (\S\ref{sec:mae_reader}), the
+perfect-text upper bound, and the Platonic alignment
+(\S\ref{sec:platonic}) --- uses a single frozen
+\texttt{bert-base-uncased} encoder \cite{devlin2019bert}. The model
+is the 12-layer, 768-hidden-dimension, 12-head Transformer
+($\sim$110\,M parameters) with a 30\,522-token WordPiece vocabulary;
+it is \emph{never} updated (no gradient flows into BERT in any
+experiment). Page text is lower-cased and tokenised with
+padding/truncation to 64 WordPiece tokens. We use three readouts of
+the frozen encoder, matched to each consumer:
+
+\begin{itemize}
+\item \textbf{Per-token last-hidden-state} $(64\times768)$ --- the
+I-JEPA text-target. The transformer predictor (depth 6, embedding
+dim 384) regresses this full token sequence from the unmasked
+visual context, conditioned on 1-D positional embeddings over the
+64 text positions.
+\item \textbf{\texttt{[CLS]} embedding} $(768$-d$)$ --- the MAE
+reader's Smooth-L1 regression target (\S\ref{sec:mae_reader}).
+\item \textbf{Token mean-pool} $(768$-d, L2-normalised$)$ --- the
+contrastive anchor for the InfoNCE MAE reader and the stronger of
+the two perfect-text readouts (R@10 $=$~0.938 vs.\ 0.747 for
+\texttt{[CLS]}).
+\end{itemize}
+
+\noindent Text targets are precomputed once over the page corpus
+and cached, so BERT runs only at preprocessing time and never
+during the vision encoder's optimisation.
+
 \subsection{Evaluation}
 \label{sec:eval}
 
