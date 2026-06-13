@@ -174,4 +174,40 @@ Title-erasure check (recall normal vs top-25%-blanked) on two contrastive reader
 
 **Finding (confound controlled):** **both deltas are positive** — recall *rises* when the title is erased, so **neither reader fingerprints the title**; the v3 layout-fingerprint failure (where blanking *dropped* trained-model accuracy) is **gone** at legible resolution (body-text objective + legible crops). **Bonus (best reader):** random title-masking during fine-tuning is not just confound control — it **boosts** the reader: R@10 **0.098 → 0.143 @2000**, 0.279 → **0.371 @300**, sim-gap 0.318 → **0.404** — the strongest MAE reader, by forcing body-content reliance + acting as augmentation.
 
+### Ticket 03 — document/text-pretrained family (zero-shot, native-224 legible crops)
+
+Protocol: same 2000-page seed-42 eval slice, page-level same-page re-identification (LOO), native-224 crops, frozen encoders. Run-dir `runs/doc_family_eval` · git `50f03597` (approx) · T4.
+
+| date | encoder | params | R@1 | R@5 | R@10 | R@20 | sim-gap | crops/s | notes |
+|---|---|---|---|---|---|---|---|---|---|
+| 2026-06-08 | **Nougat-base** (Swin-B, doc OCR) | 74M | 0.011 | 0.033 | **0.049** | 0.075 | +0.002 | 171.8 | `runs/doc_family_eval/nougat.json` |
+| 2026-06-08 | **Pix2Struct** (Google, masked-screenshot pretrain) | 92M | 0.012 | 0.035 | **0.054** | 0.082 | +0.029 | 7.8 | `runs/doc_family_eval/pix2struct.json` |
+
+**Finding:** document-pretrained zero-shot models (Nougat, Pix2Struct) sit in the **image-only SSL cluster** (R@10 0.049–0.054), far below CLIP (0.736) and SigLIP (0.697). Pix2Struct has a modest positive sim-gap (0.029) vs Nougat's near-zero gap (0.002), suggesting it encodes slightly more discriminative page structure. Neither encoder approaches the contrastive-pretrained ceiling — document pretraining alone does not yield page-level retrieval without retrieval-specific fine-tuning. Pix2Struct's 7.8 crops/s throughput (vs 171.8 for Nougat) reflects its high-resolution patch processing.
+
+### Ticket 10 — I-JEPA head fine-tunes (image-only vs text-target backbone)
+
+**Set A — 224px downsampled crops (crop_size=490→target_size=224), 30k train pages, git `a1627a72` (already in Baseline section above):**
+
+These runs are the Barış-era results at old resolution (text illegible). Listed here for cross-reference only; the legible-resolution rows (Set B) below are the V1 protocol numbers.
+
+| date | run | metric | value | run-dir |
+|---|---|---|---|---|
+| 2026-06-04 | I-JEPA Text-Target + MLP (224px, 30k) | R@10 | 0.348 | `runs/2026-06-04_131101_a1627a72_visword-ijepa-text-target-mlp-30_b195` |
+| 2026-06-05 | I-JEPA Text-Target + SALAD (224px, 30k) ★ | R@10 | **0.704** | `runs/2026-06-05_102116_a1627a72_visword-ijepa-text-target-salad-_9f04` |
+
+**Set B — 490px native-resolution crops (crop_size=490, target_size=490, legible), 30k train pages, git `50f03597`, jobs run 2026-06-08:**
+
+Protocol: same 2000-page seed-42 slice, page-level same-page re-id (LOO), 4 blocks unfrozen, 2 epochs (MLP) / 3 epochs (SALAD), lr_bb=5e-6, lr_head=5e-4.
+
+| date | slice | backbone | head | R@1 | R@5 | R@10 | R@20 | sim-gap | run-dir | git SHA |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 2026-06-08 | 10 | I-JEPA image-only (490px pretrain) | MLP | 0.157 | 0.388 | **0.525** | 0.663 | +0.349 | `runs/2026-06-08_063633_50f03597_ijepa-imageonly-mlp-30k-490_26d7` | 50f03597 |
+| 2026-06-08 | 10 | I-JEPA Text-Target (490px pretrain) | MLP | 0.157 | 0.389 | **0.526** | 0.661 | +0.349 | `runs/2026-06-08_063633_50f03597_ijepa-texttarget-mlp-30k-490_f6b3` | 50f03597 |
+| 2026-06-08 | 10 | I-JEPA Text-Target (490px pretrain) | SALAD ★ | **0.198** | 0.451 | **0.583** | 0.712 | +0.248 | `runs/2026-06-08_063633_50f03597_ijepa-texttarget-salad-30k-490_03c2` | 50f03597 |
+| (running) | 10 | I-JEPA image-only (490px pretrain) | SALAD | TBD | TBD | **TBD** | TBD | TBD | job 1184918 (T4, PENDING 2026-06-13) | 50f03597 |
+
+**Finding (ticket 10):** At legible 490px resolution, I-JEPA Text-Target SALAD reaches R@10 **0.583**, clearly above the MLP variants (0.525–0.526). Notably, image-only MLP ≈ text-target MLP (0.525 vs 0.526) — the MLP head is the bottleneck, not the backbone pretraining. The SALAD aggregator unlocks the text-target advantage. Compare: at 224px (text illegible), Text-Target SALAD hit 0.704 — **the downsampled protocol inflates recall** because layout-fingerprint shortcuts are stronger at coarser resolution. At legible 490px, the task is harder and more honest.
+
 _(append: one row per measurement; never overwrite a prior row)_
+

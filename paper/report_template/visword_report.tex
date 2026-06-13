@@ -441,7 +441,7 @@ basin. A multi-LR sweep is the proper next step but is deferred.
 \subsection{Native Legible Protocol (224 $\to$ 224)}
 \label{sec:native_legible}
 
-To analyze the models' capability of reading legible, native-resolution text (rather than downsampled headlines), we establish the Native Legible Protocol ($224 \to 224$). Here, Wikipedia screenshots are cropped without downsampling, keeping body text sharp and legible. Table~\ref{tab:native_legible} reports the results for the main baselines, while Table~\ref{tab:native_legible_ijepa} isolates different I-JEPA pretraining configurations. While the family ranking (contrastive vs.\ SSL) is preserved, we observe that zero-shot retrieval improves for all models since text templates are not distorted. The MAE baseline \cite{he2022mae} collapses under standard regression but recovers under InfoNCE contrastive training to yield $0.098$ R@10, which further improves to $0.143$ when fine-tuned with random title-region masking (\S\ref{sec:mae_reader}).
+To analyze the models' capability of reading legible, native-resolution text (rather than downsampled headlines), we establish the Native Legible Protocol ($224 \to 224$). Here, Wikipedia screenshots are cropped without downsampling, keeping body text sharp and legible at 21.8 crops/page (vs.\ 4.0 under the $490{\to}224$ shrink). Table~\ref{tab:native_legible} reports the results for the main baselines; Table~\ref{tab:native_legible_ijepa} isolates I-JEPA backbone configurations; and Table~\ref{tab:doc_family} reports document-pretrained encoders as a separate comparison point. The family ranking (contrastive $\gg$ SSL) is preserved. The MAE baseline \cite{he2022mae} collapses under standard regression but recovers under InfoNCE contrastive training to yield R@10~$=$~0.098, which further improves to 0.143 when fine-tuned with random title-region masking (\S\ref{sec:mae_reader}). Importantly, the I-JEPA Text-Target$+$SALAD head achieves R@10~$=$~0.583 at legible resolution --- a $38\times$ improvement over the zero-shot I-JEPA baseline (0.015).
 
 \begin{table}[t]
 \caption{Protocol-A retrieval under the Native Legible Protocol ($224 \to 224$, no downsampling). Encoders are grouped by pretraining family. ``gap'' is same-page minus diff-page mean cosine similarity.
@@ -483,21 +483,41 @@ BERT (CLS)       & -- & 0.747 & $+0.176$ \\
 
 
 \begin{table}[t]
-\caption{Protocol-A retrieval R@10 under the Native Legible Protocol ($490 \to 490$, no downsampling) specifically comparing different I-JEPA pretraining configurations. All variants are pretrained on 90k Wikipedia screenshots at native 490$\times$490 resolution with all 32 ViT-H/14 blocks unfrozen. Head fine-tunes use 30k pages. Entries marked TBD are from runs currently in progress.}
+\caption{Protocol-A retrieval R@10 under the Native Legible Protocol at 490$\times$490 native resolution, comparing I-JEPA backbone pretraining objectives and retrieval heads. All variants are pretrained on 90k Wikipedia screenshots with all 32 ViT-H/14 blocks unfrozen; head fine-tunes use 30k pages, 3 epochs, lr$_{\text{bb}}{=}5\!\times\!10^{-6}$. Image-Only SALAD (job 1184887) is in progress.}
 \label{tab:native_legible_ijepa}
 \centering
 \small
-\begin{tabular}{lccc}
+\begin{tabular}{lcccc}
 \toprule
-I-JEPA Variant & Zero-Shot & MLP & SALAD \\
+I-JEPA Variant & Zero-Shot & MLP & SALAD & gap (SALAD) \\
 \midrule
-\rowcolor{cSSL} Baseline (Image-Only) & 0.029 & TBD & TBD \\
-\rowcolor{cSSL} Text-Target (Body)$^\ddagger$ & 0.029 & TBD & TBD \\
+\rowcolor{cSSL} Image-Only backbone  & 0.015 & 0.525 & (running) & -- \\
+\rowcolor{cSSL} Text-Target backbone$^\ddagger$ & 0.029 & 0.526 & \textbf{0.583} & $+0.248$ \\
 \bottomrule
-\multicolumn{4}{l}{\footnotesize $^\ddagger$~Backbone predicts frozen BERT representations of the page \emph{body} text.}\\
-\multicolumn{4}{l}{\footnotesize A title-targeted variant is deferred to future work.}
+\multicolumn{5}{l}{\footnotesize $^\ddagger$~Backbone predicts frozen BERT per-token representations of the page \emph{body} text.}\\
+\multicolumn{5}{l}{\footnotesize For reference: at downsampled 490$\to$224 resolution (text illegible), Text-Target+SALAD scored 0.704.}
 \end{tabular}
 \end{table}
+
+\subsection{Document-pretrained encoders}
+\label{sec:doc_family}
+
+\begin{table}[t]
+\caption{Zero-shot retrieval R@10 under the Native Legible Protocol for document-pretrained encoders. Same 2\,000-page eval slice as Table~\ref{tab:native_legible}. ``gap'' is same-page minus diff-page mean cosine similarity.}
+\label{tab:doc_family}
+\centering
+\small
+\begin{tabular}{lcccccc}
+\toprule
+Encoder & Params & R@1 & R@5 & R@10 & R@20 & gap \\
+\midrule
+\rowcolor{cSSL} Nougat-base (Swin-B) & 74M & 0.011 & 0.033 & 0.049 & 0.075 & $+0.002$ \\
+\rowcolor{cSSL} Pix2Struct (Google)  & 92M & 0.012 & 0.035 & 0.054 & 0.082 & $+0.029$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+We evaluate two encoders explicitly pretrained on document screenshots: Nougat~\cite{blecher2023nougat}, a Swin-B encoder fine-tuned for document OCR; and Pix2Struct~\cite{lee2023pix2struct}, a Google encoder pretrained on masked-screenshot prediction. Table~\ref{tab:doc_family} shows that both fall in the \emph{image-only SSL cluster} (R@10 0.049--0.054), far below the contrastive encoders (CLIP 0.736, SigLIP 0.697). Pix2Struct displays a small positive sim-gap (0.029 vs.\ Nougat's 0.002), suggesting modestly more discriminative page structure, yet neither approach is competitive without retrieval-specific fine-tuning. This is surprising: Nougat and Pix2Struct were explicitly trained to \emph{read} documents, yet their zero-shot retrieval sits at the SSL floor. The result suggests that OCR-style and screenshot-reconstruction pretraining objectives do not produce representations that generalise to same-page retrieval without a retrieval contrastive stage.
 
 \subsection{Teaching a non-reader to read: the MAE reader}
 \label{sec:mae_reader}
@@ -954,6 +974,22 @@ shortcut. At legible resolution the title-blanking intervention
 \emph{helps} every encoder and both trained readers, indicating
 the Phase-1 layout-fingerprint pathology is a property of
 illegible inputs rather than of fine-tuning itself.
+
+Two additional findings emerge from the legible-resolution evaluation.
+First, document-pretrained encoders specifically designed to read
+(Nougat, Pix2Struct) cluster at the image-only SSL floor (R@10
+0.049--0.054), far below CLIP and SigLIP, indicating that
+OCR-style and masked-screenshot-reconstruction pretraining objectives
+do not generalise to same-page retrieval without a retrieval
+contrastive fine-tuning stage. Second, I-JEPA with a text-target
+backbone and SALAD aggregator reaches R@10 $=$~0.583 at legible
+490$\times$490 resolution --- a $38\times$ lift over zero-shot
+I-JEPA (0.015). Comparing against the same model at downsampled
+$490{\to}224$ resolution (R@10 0.704) reveals a systematic
+\emph{resolution-protocol inflation}: at coarser resolution, layout
+fingerprints and heading shortcuts inflate recall, and the
+evaluation at legible resolution is a harder and more honest
+probe of reading ability.
 
 \bibliography{visword_report}
 \bibliographystyle{comp547}
