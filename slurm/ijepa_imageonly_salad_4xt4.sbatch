@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Single T4, 48-hour fine-tune for the image-only I-JEPA + SALAD head at 490×490.
+# Single A40 (48GB), 48-hour fine-tune for the image-only I-JEPA + SALAD head at 490×490.
 # Fills the last TBD cell in the I-JEPA heads comparison table.
 #
 # Root cause of the previous crash (step 69, job 002521): the earlier job used a
@@ -15,11 +15,11 @@
 #SBATCH --partition=ai
 #SBATCH --qos=ai
 #SBATCH --account=ai
-#SBATCH --gres=gpu:tesla_t4:1
+#SBATCH --gres=gpu:ampere_a40:1
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=4
-#SBATCH --mem=32G
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=128G
 #SBATCH --time=48:00:00
 
 set -euo pipefail

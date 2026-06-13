@@ -3,7 +3,7 @@
 
 \documentclass{article}
 
-\usepackage{microtype}
+% \usepackage{microtype}
 \usepackage{graphicx}
 \usepackage{booktabs}
 \usepackage{amsmath}
@@ -483,7 +483,7 @@ BERT (CLS)       & -- & 0.747 & $+0.176$ \\
 
 
 \begin{table}[t]
-\caption{Protocol-A retrieval R@10 under the Native Legible Protocol at 490$\times$490 native resolution, comparing I-JEPA backbone pretraining objectives and retrieval heads. All variants are pretrained on 90k Wikipedia screenshots with all 32 ViT-H/14 blocks unfrozen; head fine-tunes use 30k pages, 3 epochs, lr$_{\text{bb}}{=}5\!\times\!10^{-6}$. Image-Only SALAD (job 1184887) is in progress.}
+\caption{Protocol-A retrieval R@10 under the Native Legible Protocol at 490$\times$490 native resolution, comparing I-JEPA backbones and heads (30k pages, 3 epochs).}
 \label{tab:native_legible_ijepa}
 \centering
 \small
@@ -491,11 +491,9 @@ BERT (CLS)       & -- & 0.747 & $+0.176$ \\
 \toprule
 I-JEPA Variant & Zero-Shot & MLP & SALAD & gap (SALAD) \\
 \midrule
-\rowcolor{cSSL} Image-Only backbone  & 0.015 & 0.525 & (running) & -- \\
-\rowcolor{cSSL} Text-Target backbone$^\ddagger$ & 0.029 & 0.526 & \textbf{0.583} & $+0.248$ \\
+\rowcolor{cSSL} Image-Only & 0.015 & 0.525 & (running) & -- \\
+\rowcolor{cSSL} Text-Target & 0.029 & 0.526 & \textbf{0.583} & $+0.248$ \\
 \bottomrule
-\multicolumn{5}{l}{\footnotesize $^\ddagger$~Backbone predicts frozen BERT per-token representations of the page \emph{body} text.}\\
-\multicolumn{5}{l}{\footnotesize For reference: at downsampled 490$\to$224 resolution (text illegible), Text-Target+SALAD scored 0.704.}
 \end{tabular}
 \end{table}
 
@@ -503,16 +501,16 @@ I-JEPA Variant & Zero-Shot & MLP & SALAD & gap (SALAD) \\
 \label{sec:doc_family}
 
 \begin{table}[t]
-\caption{Zero-shot retrieval R@10 under the Native Legible Protocol for document-pretrained encoders. Same 2\,000-page eval slice as Table~\ref{tab:native_legible}. ``gap'' is same-page minus diff-page mean cosine similarity.}
+\caption{Zero-shot retrieval under the Native Legible Protocol for document-pretrained encoders. Same 2\,000-page eval slice as Table~\ref{tab:native_legible}. ``gap'' is same-page minus diff-page mean cosine similarity.}
 \label{tab:doc_family}
 \centering
 \small
-\begin{tabular}{lcccccc}
+\begin{tabular}{lcccc}
 \toprule
-Encoder & Params & R@1 & R@5 & R@10 & R@20 & gap \\
+Encoder & Params & R@1 & R@10 & gap \\
 \midrule
-\rowcolor{cSSL} Nougat-base (Swin-B) & 74M & 0.011 & 0.033 & 0.049 & 0.075 & $+0.002$ \\
-\rowcolor{cSSL} Pix2Struct (Google)  & 92M & 0.012 & 0.035 & 0.054 & 0.082 & $+0.029$ \\
+\rowcolor{cSSL} Nougat-base (Swin-B) & 74M & 0.011 & 0.049 & $+0.002$ \\
+\rowcolor{cSSL} Pix2Struct (Google)  & 92M & 0.012 & 0.054 & $+0.029$ \\
 \bottomrule
 \end{tabular}
 \end{table}
