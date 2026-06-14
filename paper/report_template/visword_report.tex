@@ -52,43 +52,7 @@ University, Istanbul, Turkey}
 \printAffiliationsAndNotice{}
 
 \begin{abstract}
-We ask whether vision models acquire linguistic structure when
-their training data consists of rendered text. As a probe, we use
-retrieval over a 2\,000-page held-out slice of Wikipedia
-screenshots: given a $224{\times}224$ crop, identify its source
-page. We compare six encoders trained with five distinct
-objectives, including a joint-embedding predictive architecture
-(I-JEPA) that is the canonical image-only predictive baseline. The
-finding is sharp: image--text contrastive encoders (CLIP, SigLIP)
-retrieve at R@10 $=$~0.78 and 0.62 zero-shot, while image-only
-predictive (I-JEPA), self-supervised contrastive (DINOv2),
-supervised classification (ImageNet ViT), and random-init plain ViT
-all sit at R@10 $\le 0.058$. I-JEPA in particular scores
-\emph{below} random initialisation. Across the six encoders,
-mutual-$k$NN alignment with text encoders rank-correlates with
-retrieval R@10 at Spearman $\rho = 0.83$ ($p = 0.04$), supporting
-the Platonic Representation Hypothesis as the explanatory axis.
-Fine-tuning DINOv2 with a SALAD aggregator on 50\,k pages reaches
-R@10 $=$~0.915, exceeding zero-shot CLIP, but every fine-tuned
-checkpoint exhibits a layout-fingerprint failure mode: erasing the
-top 15--30\,\% of every test image drops in-distribution Protocol-A
-R@10 by up to 0.29 while \emph{improving} cross-set Phase-2 R@1 by
-up to $6.7\times$ on the same checkpoints. Zero-shot CLIP and SigLIP
-move in the opposite direction (R@10 \emph{rises} by 0.07--0.11
-under blanking), falsifying the title-OCR explanation for their
-zero-shot edge. A linear adapter trained on
-(image, BERT-of-title) pairs lifts I-JEPA from R@10~$=$~0.015
-to 0.197, recovering latent text alignment that is invisible without
-the projection.
-Re-running the comparison under a native-resolution protocol that
-keeps body text legible, we find the family ranking survives and the
-layout-shortcut failure mode disappears---blanking the title now
-\emph{raises} R@10 for every encoder. We further show a non-reading
-encoder can be taught to read: a frozen MAE ($0.036$, $\approx$
-random) reaches $0.143$ via an InfoNCE-to-BERT reader with
-title-masking, against a perfect-text ceiling of $0.938$; and a
-text-target I-JEPA that predicts frozen BERT token embeddings of the
-page text attains R@10~$=$~$0.583$ with a SALAD head.
+We investigate whether vision models acquire linguistic structure when trained on rendered text. Using crop-to-page retrieval over Wikipedia screenshots as a probe, we compare six encoders across five objectives. Zero-shot image--text contrastive encoders (CLIP, SigLIP) perform strongly (R@10 $=$ 0.78, 0.62), whereas image-only self-supervised, supervised, and random baselines remain near the floor (R@10 $\le 0.058$). Mutual-$k$NN alignment with text encoders correlates with retrieval performance (Spearman $\rho = 0.83$), supporting the Platonic Representation Hypothesis. While DINOv2 with a SALAD aggregator fine-tuned on 50\,k pages reaches R@10 $=$ 0.915, it overfits to layout-fingerprint shortcuts. This failure mode disappears under a native legible-resolution protocol. Under this protocol, a frozen MAE (0.036, $\approx$ random) can be taught to read via InfoNCE fine-tuning (R@10 reaches 0.143), and a text-target I-JEPA predicting frozen BERT embeddings achieves R@10 $=$ 0.583.
 \end{abstract}
 
 \begin{figure*}[t]
@@ -143,7 +107,7 @@ trained on ImageNet-21k+1k labels.
 floor.
 \end{itemize}
 
-Three questions:
+Five questions:
 
 \textbf{Q1 (zero-shot reading).} Which pretraining produces image
 representations from which the source page can be retrieved
@@ -220,6 +184,9 @@ post-hoc to a frozen DINOv2 reaches CLIP-level zero-shot
 classification, suggesting that self-supervised image features
 already contain a linguistically-decodable structure. We test the
 analogous claim for I-JEPA on document screenshots.
+
+\textbf{Predictive pre-training with frozen semantic targets.}
+Standard joint-embedding predictive architectures (JEPA) \cite{assran2023ijepa} predict the latent representations of masked patches from unmasked visual context. Recent work has shown the viability of training JEPAs with frozen teachers, such as the SALT framework \cite{li2025salt} for video representation learning. Here, we extend this paradigm to predict frozen semantic targets, such as pre-trained text embeddings (e.g., from BERT), instead of raw visual features. This aligns visual backbones with semantic representations during pre-training. We study this strategy by pre-training a text-target I-JEPA to predict frozen BERT token sequences from masked screenshot regions.
 
 \textbf{Image--text contrastive pretraining and OCR shortcuts.}
 CLIP \cite{radford2021clip} and SigLIP \cite{zhai2023siglip} are
@@ -564,7 +531,7 @@ BERT (CLS)       & -- & 0.747 & $+0.176$ \\
 \toprule
 I-JEPA Variant & Zero-Shot & MLP & SALAD & gap \\
 \midrule
-\rowcolor{cSSL} Image-Only & 0.015 & 0.525 & (running) & -- \\
+\rowcolor{cSSL} Image-Only & 0.054 & 0.525 & \textbf{0.599} & $+0.254$ \\
 \rowcolor{cSSL} Text-Target & 0.029 & 0.526 & \textbf{0.583} & $+0.248$ \\
 \bottomrule
 \end{tabular}
@@ -689,7 +656,7 @@ Encoder & orig.\ R@10 & b-25 R@10 & $\Delta$ \\
 \rowcolor{cRND} Plain ViT-B/16   & 0.042 & 0.055 & $+0.012$ \\
 \rowcolor{cSSL} MAE ViT-B/16     & 0.036 & 0.047 & $+0.011$ \\
 \midrule
-\rowcolor{cFT} MAE reader (contrastive) & 0.097 & 0.110 & $+0.013$ \\
+\rowcolor{cFT} MAE reader (contrastive) & 0.098 & 0.110 & $+0.013$ \\
 \rowcolor{cFT} MAE reader (+title-mask) & 0.143 & 0.176 & $+0.033$ \\
 \bottomrule
 \end{tabular}
@@ -784,8 +751,8 @@ since no single crop sees the whole layout. All training and
 evaluation use Wikipedia screenshots, which share one clean,
 consistent template; generalisation to noisy, multi-column, or
 scanned documents (e.g.\ arXiv PDFs) is untested. The I-JEPA
-adapter R@10 $=$~0.197 is evidence of latent alignment, not a
-practical recipe; matching CLIP-level retrieval would need a
+adapter R@10 $=$~0.214 (0.219 under a deep MLP) (under the downsampled $490{\to}224$ protocol)
+is evidence of latent alignment, not a practical recipe; matching CLIP-level retrieval would need a
 non-linear adapter and larger paired-data training. Likewise the
 MAE reader's 0.143 demonstrates that a non-reader backbone can be
 taught genuine page separation, not that it is competitive with
@@ -808,7 +775,9 @@ reaches R@10 $=$~0.915, exceeding zero-shot CLIP, but introduces a
 universal pathology: the fine-tuned model overweights the title
 region (R@10 drops up to 0.29 under blanking), whereas zero-shot
 CLIP and SigLIP \emph{improve} under the same blanking, falsifying
-the title-OCR explanation for their edge.
+the title-OCR explanation for their edge, and a linear adapter to BERT
+space recovers latent text structure in I-JEPA that is invisible
+zero-shot (R@10 $0.009\!\to\!0.214$ [$0.219$ under a deep MLP] under the downsampled protocol).
 
 Re-running the grid under the Native Legible Protocol --- crops at
 native pixel scale, so body text is actually readable --- shows
@@ -837,6 +806,11 @@ $490{\to}224$ figure (0.704) reflecting resolution-protocol inflation
 rather than better reading.
 
 \section*{Acknowledgements}
+We thank the COMP547 course staff for their guidance throughout the
+project, and Ko\c{c} University's high-performance computing cluster
+for the GPU resources used in all experiments.
+
+\section*{Author Contributions}
 Both authors contributed equally to this work. They jointly
 formulated the research questions, designed the
 crop$\rightarrow$page evaluation protocol and shared infrastructure,
@@ -963,10 +937,10 @@ feature space). Last column: explained variance of the rank-1 PCA.}
 \toprule
 Encoder & orig & blank & LEACE & expl.\,var \\
 \midrule
-\rowcolor{cITC} CLIP zero-shot       & 0.779 & 0.823 & \textbf{0.863} & 0.25 \\
-\rowcolor{cITC} SigLIP zero-shot     & 0.611 & 0.716 & \textbf{0.775} & 0.35 \\
-\rowcolor{cSSL} DINOv2 zero-shot     & 0.058 & 0.056 & 0.068          & 0.76 \\
-\rowcolor{cFT}  DINOv2-SALAD-50k     & 0.911 & 0.670 & 0.912          & 0.20 \\
+\rowcolor{cITC} CLIP zero-shot           & 0.779 & 0.852 & \textbf{0.863} & 0.25 \\
+\rowcolor{cITC} SigLIP zero-shot         & 0.624 & 0.731 & \textbf{0.775} & 0.35 \\
+\rowcolor{cSSL} DINOv2 zero-shot         & 0.058 & 0.058 & 0.068          & 0.76 \\
+\rowcolor{cFT}  DINOv2-SALAD-50k trained & 0.915 & 0.673 & 0.912          & 0.20 \\
 \bottomrule
 \multicolumn{5}{l}{\footnotesize R@10 columns: original / title-blanked / rank-1 LEACE-erased.}
 \end{tabular}
@@ -1023,8 +997,8 @@ Encoder & orig.\ R@10 & b-15 R@10 & $\Delta$ \\
 \rowcolor{cSUP} ImageNet zero-shot     & 0.031 & 0.032 & $+0.001$ \\
 \rowcolor{cRND} Plain-ViT zero-shot    & 0.029 & 0.030 & $+0.001$ \\
 \midrule
-\rowcolor{cFT}  DINOv2-MLP-30k         & 0.787 & 0.494 & $-0.292$ \\
-\rowcolor{cFT}  DINOv2-SALAD-30k       & 0.880 & 0.720 & $-0.161$ \\
+\rowcolor{cFT}  DINOv2-MLP-30k         & 0.787 & 0.494 & -0.293 \\
+\rowcolor{cFT}  DINOv2-SALAD-30k       & 0.880 & 0.720 & -0.160 \\
 \rowcolor{cFT}  DINOv2-SALAD-50k       & 0.915 & 0.673 & $-0.242$ \\
 \rowcolor{cFT}  CLIP-SALAD-30k         & 0.724 & 0.687 & $-0.037$ \\
 \bottomrule

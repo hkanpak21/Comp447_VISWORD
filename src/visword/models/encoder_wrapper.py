@@ -29,6 +29,29 @@ from visword.models.zeroshot import (
     ZeroShotNougat,
 )
 
+def build_ijepa_text_target(cfg: Config | None = None) -> nn.Module:
+    from visword.models.zeroshot import ZeroShotIJepa
+    import torch
+    model = ZeroShotIJepa(cfg)
+    pretrained_checkpoint = "/scratch/bbakay22/VISWORD/runs/2026-06-03_070502_acfc947c_ijepa-text-target-all-blocks-ful_e27e/checkpoints/last.pt"
+    ckpt = torch.load(pretrained_checkpoint, map_location="cpu", weights_only=True)
+    if "encoder" in ckpt:
+        state_dict = ckpt["encoder"]
+    elif "model_state_dict" in ckpt:
+        state_dict = ckpt["model_state_dict"]
+    else:
+        state_dict = ckpt
+    
+    new_state_dict = {}
+    for k, v in state_dict.items():
+        if k.startswith("model."):
+            new_state_dict[k[6:]] = v
+        else:
+            new_state_dict[k] = v
+    model.model.load_state_dict(new_state_dict, strict=False)
+    return model
+
+
 # name -> builder(cfg). Order = the grid's reporting order.
 _ENCODERS: dict[str, Callable[[Config | None], nn.Module]] = {
     "clip": lambda cfg: ZeroShotCLIPImage(cfg),
@@ -38,6 +61,7 @@ _ENCODERS: dict[str, Callable[[Config | None], nn.Module]] = {
     "imagenet_vit": lambda cfg: ZeroShotImageNetViT(cfg),
     "random_vit": lambda cfg: ZeroShotPlainViT(cfg),
     "ijepa": lambda cfg: ZeroShotIJepa(cfg),
+    "ijepa_text_target": lambda cfg: build_ijepa_text_target(cfg),
     "mae": lambda cfg: ZeroShotMAE(cfg),
     # Doc-pretrained family (ticket 03) — OCR-free document encoders.
     "pix2struct": lambda cfg: ZeroShotPix2Struct(cfg),
@@ -45,7 +69,7 @@ _ENCODERS: dict[str, Callable[[Config | None], nn.Module]] = {
     "nougat": lambda cfg: ZeroShotNougat(cfg),
 }
 
-#: Canonical grid order; ``ijepa`` is ViT-H/14 (not matched-arch — see zeroshot.py).
+# Canonical grid order; ``ijepa`` is ViT-H/14 (not matched-arch — see zeroshot.py).
 ENCODER_NAMES: tuple[str, ...] = tuple(_ENCODERS)
 
 
