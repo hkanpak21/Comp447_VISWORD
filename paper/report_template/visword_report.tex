@@ -125,6 +125,7 @@ hard negatives (crops of unrelated pages).}
 \label{fig:bench}
 \end{figure}
 
+\textbf{Pixel-based language models and visual document AI.}
 PIXEL \cite{rust2023pixel}, CLIPPO \cite{tschannen2023clippo} and
 Pix2Struct \cite{lee2023pix2struct} all train transformers on
 rendered text and demonstrate that pixel inputs can match or exceed
@@ -182,18 +183,6 @@ layout structure remain visually recoverable. ``Reading'' in this
 paper therefore refers to heading-level text and visual layout, not
 fluent body content.
 
-\begin{figure}[t]
-\centering
-\includegraphics[width=\columnwidth]{figures/Training.pdf}
-\caption{Training. Each step samples four pages $\times$ four
-crops; same-page crops are positives, cross-page crops are
-negatives. The image encoder produces an L2-normalised descriptor;
-training minimises a multi-similarity contrastive loss
-\cite{wang2019msloss}. We unfreeze the last four ViT blocks
-(of twelve) and train a head on top.}
-\label{fig:train}
-\end{figure}
-
 \begin{figure*}[t]
 \centering
 \includegraphics[width=0.92\textwidth]{figures/ijepa_text_target_arch.png}
@@ -228,6 +217,18 @@ descriptor. Only the head and the last four ViT blocks are
 trainable. Fine-tunes use 30\,000 training pages $\times$ 3 epochs
 (5\,625 optimiser steps), one seed; the saturation
 diagnostic uses 50\,000 pages.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/Training.pdf}
+\caption{Training. Each step samples four pages $\times$ four
+crops; same-page crops are positives, cross-page crops are
+negatives. The image encoder produces an L2-normalised descriptor;
+training minimises a multi-similarity contrastive loss
+\cite{wang2019msloss}. We unfreeze the last four ViT blocks
+(of twelve) and train a head on top.}
+\label{fig:train}
+\end{figure}
 
 \subsection{Text-target I-JEPA}
 \label{sec:texttarget}
