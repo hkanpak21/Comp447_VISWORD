@@ -806,13 +806,9 @@ the Platonic Representation Hypothesis on this domain.
 Fine-tuning DINOv2 with the SALAD aggregator on 50\,k pages
 reaches R@10 $=$~0.915, exceeding zero-shot CLIP, but introduces a
 universal pathology: the fine-tuned model overweights the title
-region, dropping in-distribution Protocol-A R@10 by up to 0.29
-under blanking while \emph{improving} cross-set Phase-2 R@1 by up
-to $6.7\times$. Zero-shot CLIP and SigLIP show the opposite sign
-under the same blanking, falsifying the simple title-OCR
-explanation for their zero-shot edge, and a linear adapter to BERT
-space recovers latent text structure in I-JEPA that is invisible
-zero-shot (R@10 $0.015\!\to\!0.197$).
+region (R@10 drops up to 0.29 under blanking), whereas zero-shot
+CLIP and SigLIP \emph{improve} under the same blanking, falsifying
+the title-OCR explanation for their edge.
 
 Re-running the grid under the Native Legible Protocol --- crops at
 native pixel scale, so body text is actually readable --- shows
