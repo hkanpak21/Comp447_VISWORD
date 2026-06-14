@@ -107,59 +107,7 @@ trained on ImageNet-21k+1k labels.
 floor.
 \end{itemize}
 
-Five questions:
-
-\textbf{Q1 (zero-shot reading).} Which pretraining produces image
-representations from which the source page can be retrieved
-zero-shot?
-
-\textbf{Q2 (JEPA specifically).} Does I-JEPA, an image-only
-predictive objective with no text supervision, acquire any
-linguistic structure detectable through retrieval?
-
-\textbf{Q3 (the Platonic axis).} Does the Platonic Representation
-Hypothesis \cite{huh2024platonic} --- which predicts that encoders
-trained on diverse objectives converge to a shared abstract
-representation --- explain the retrieval ordering quantitatively?
-We measure each image encoder's mutual-$k$NN alignment with text
-encoders on the same content and ask whether alignment predicts
-retrieval performance.
-
-\textbf{Q4 (legible reading).} Earlier evaluations downsampled
-crops $490\!\to\!224$, rendering body text sub-pixel. When crops are
-kept at native resolution so body text is legible, does the
-pretraining-family ranking survive, and does the layout-shortcut
-failure mode persist?
-
-\textbf{Q5 (text targets).} Can a cross-modal predictive objective
---- training I-JEPA to predict the meaning (frozen BERT embeddings)
-of the text in masked regions, rather than image latents --- produce
-representations that read better than the image-only objective?
-
-\textbf{Contributions.}
-(1)~A leak-free crop$\rightarrow$page protocol with leave-one-out
-gallery aggregation.
-(2)~A six-encoder zero-shot grid showing image--text contrastive
-encoders dominating the four image-only baselines, with I-JEPA
-sitting \emph{below} random initialisation.
-(3)~A Platonic alignment grid producing the rank correlation
-$\rho = 0.83$ between alignment and retrieval, statistically
-significant at $n = 6$.
-(4)~A reproducible failure mode in every fine-tuned checkpoint:
-erasing the top 15--30\,\% of every test image
-\emph{improves} cross-set transfer, indicating the model
-overweights a layout confound rather than reading content.
-(5)~A native-resolution \emph{Native Legible Protocol}: the
-family ranking survives at legible resolution, and the
-layout-shortcut failure mode disappears (blanking the title now
-\emph{helps} every encoder).
-(6)~A demonstration that a non-reading encoder can be taught to
-read: a frozen MAE (R@10~$=$~0.036, $\approx$ random) reaches
-0.143 via an InfoNCE-to-BERT reader with title-masking, bounded by
-a perfect-text ceiling of 0.938.
-(7)~A text-target I-JEPA that predicts frozen BERT token embeddings
-of the page text, reaching R@10~$=$~0.583 with a SALAD head at
-legible resolution.
+To systematically investigate whether and how these encoders acquire document and linguistic structures, we design a series of probes and pretraining interventions. Specifically, we introduce a leak-free crop-to-page retrieval protocol using leave-one-out gallery aggregation to evaluate reading capabilities under both downsampled ($490{\to}224$\,px) and native legible-resolution settings. Our zero-shot evaluation reveals that while image--text contrastive models (CLIP, SigLIP) perform strongly, image-only self-supervised baselines (DINOv2, I-JEPA) fail to read out-of-the-box, with I-JEPA sitting below random initialisation. We quantify cross-modal alignment and show a strong rank correlation ($\rho = 0.83$) between an image encoder's similarity to a text encoder and its page-retrieval performance, supporting the Platonic Representation Hypothesis \cite{huh2024platonic}. Furthermore, we diagnose a layout-fingerprint shortcut in fine-tuned models and show that our \emph{Native Legible Protocol} resolves this shortcut. Finally, we demonstrate that non-reading encoders can be taught to read: InfoNCE fine-tuning lifts a frozen MAE (R@10~$=$~0.036) to 0.143; and a text-target I-JEPA pre-trained to predict frozen BERT token embeddings of masked screenshot text achieves a strong zero-shot retrieval rate of R@10~$=$~0.583 with a SALAD head.
 
 \section{Related Work}
 \label{sec:related}
