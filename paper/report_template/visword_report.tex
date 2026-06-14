@@ -76,6 +76,15 @@ zero-shot edge. A linear adapter trained on
 (image, BERT-of-title) pairs lifts I-JEPA from R@10~$=$~0.015
 to 0.197, recovering latent text alignment that is invisible without
 the projection.
+Re-running the comparison under a native-resolution protocol that
+keeps body text legible, we find the family ranking survives and the
+layout-shortcut failure mode disappears---blanking the title now
+\emph{raises} R@10 for every encoder. We further show a non-reading
+encoder can be taught to read: a frozen MAE ($0.036$, $\approx$
+random) reaches $0.143$ via an InfoNCE-to-BERT reader with
+title-masking, against a perfect-text ceiling of $0.938$; and a
+text-target I-JEPA that predicts frozen BERT token embeddings of the
+page text attains R@10~$=$~$0.583$ with a SALAD head.
 \end{abstract}
 
 \begin{figure*}[t]
@@ -148,6 +157,17 @@ We measure each image encoder's mutual-$k$NN alignment with text
 encoders on the same content and ask whether alignment predicts
 retrieval performance.
 
+\textbf{Q4 (legible reading).} Earlier evaluations downsampled
+crops $490\!\to\!224$, rendering body text sub-pixel. When crops are
+kept at native resolution so body text is legible, does the
+pretraining-family ranking survive, and does the layout-shortcut
+failure mode persist?
+
+\textbf{Q5 (text targets).} Can a cross-modal predictive objective
+--- training I-JEPA to predict the meaning (frozen BERT embeddings)
+of the text in masked regions, rather than image latents --- produce
+representations that read better than the image-only objective?
+
 \textbf{Contributions.}
 (1)~A leak-free crop$\rightarrow$page protocol with leave-one-out
 gallery aggregation.
@@ -161,6 +181,17 @@ significant at $n = 6$.
 erasing the top 15--30\,\% of every test image
 \emph{improves} cross-set transfer, indicating the model
 overweights a layout confound rather than reading content.
+(5)~A native-resolution \emph{Native Legible Protocol}: the
+family ranking survives at legible resolution, and the
+layout-shortcut failure mode disappears (blanking the title now
+\emph{helps} every encoder).
+(6)~A demonstration that a non-reading encoder can be taught to
+read: a frozen MAE (R@10~$=$~0.036, $\approx$ random) reaches
+0.143 via an InfoNCE-to-BERT reader with title-masking, bounded by
+a perfect-text ceiling of 0.938.
+(7)~A text-target I-JEPA that predicts frozen BERT token embeddings
+of the page text, reaching R@10~$=$~0.583 with a SALAD head at
+legible resolution.
 
 \section{Related Work}
 \label{sec:related}
@@ -678,27 +709,6 @@ readers do not adopt the title shortcut. Random title-masking
 during training retains its role as a guard --- and doubles as
 augmentation, providing the best reader (0.143).
 
-\subsection{Vision-to-vision adapter capacity}
-\label{sec:adapter_vv}
-
-\begin{table}[t]
-\caption{Protocol-A Phase 1 R@10 for the frozen-backbone vision-to-vision adapter grid. Backbones are frozen, and only the adapter head is trained for 3 epochs. CLIP fails completely due to lack of local variance, whereas DINOv2 and I-JEPA perform best with a simple linear adapter.}
-\label{tab:adapter_vv}
-\centering
-\small
-\begin{tabular}{lccc}
-\toprule
-Backbone & Linear & MLP & Bottleneck \\
-\midrule
-\rowcolor{cSSL} DINOv2 & \textbf{0.229} & 0.207 & 0.184 \\
-\rowcolor{cSSL} I-JEPA & 0.180 & 0.157 & 0.146 \\
-\rowcolor{cITC} CLIP   & 0.003 & 0.003 & 0.003 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-To isolate the effect of adapter capacity from backbone fine-tuning, we sweep linear, MLP, and bottleneck heads over frozen backbones (Table~\ref{tab:adapter_vv}). We observe that CLIP completely collapses to a constant representation (R@10 $\approx 0.003$) regardless of adapter capacity, stemming from its lack of fine-grained patch variance on document crops. Conversely, DINOv2 and I-JEPA learn meaningful projections, with the simplest linear adapter yielding the best performance (0.229 for DINOv2), suggesting that higher-capacity heads overfit the frozen visual features.
-
 \subsection{Platonic alignment predicts retrieval}
 
 \begin{table}[t]
@@ -751,81 +761,132 @@ representations on the same content. The Platonic Hypothesis is
 supported in this domain: encoders close to the text-encoder
 geometry retrieve text-heavy visual documents better.
 
-\subsection{Title-region ablation}
+\section{Discussion and Limitations}
+\label{sec:disc}
+
+All training uses a single random seed. The cross-family
+ordering is large enough to read past seed noise (closest gap
+$\Delta$R@10 $=0.093$, well outside typical jitter), but
+within-family comparisons (CLIP-SALAD vs.\ CLIP-MLP) need
+multi-seed reruns. Pool size $P{=}2000$ is small versus industrial
+$10^5$--$10^6$; numbers are within-table comparable, not cross-paper.
+Under the original $490{\to}224$ protocol, body text is sub-pixel,
+so ``reading'' there means heading-level text plus layout, not
+fluent content; the Native Legible Protocol
+(\S\ref{sec:native_legible}) removes this confound, but at a cost:
+tiling pages into native-scale crops ($\sim$21.8 per page versus
+4.0) multiplies encoding cost and sacrifices global page context,
+since no single crop sees the whole layout. All training and
+evaluation use Wikipedia screenshots, which share one clean,
+consistent template; generalisation to noisy, multi-column, or
+scanned documents (e.g.\ arXiv PDFs) is untested. The I-JEPA
+adapter R@10 $=$~0.197 is evidence of latent alignment, not a
+practical recipe; matching CLIP-level retrieval would need a
+non-linear adapter and larger paired-data training. Likewise the
+MAE reader's 0.143 demonstrates that a non-reader backbone can be
+taught genuine page separation, not that it is competitive with
+contrastively pretrained encoders.
+
+\section{Conclusion}
+\label{sec:conclusions}
+
+We compared six image encoders trained with five distinct
+pretraining objectives on a leak-free crop$\rightarrow$page
+retrieval task over Wikipedia screenshots. Image--text contrastive
+pretraining (CLIP, SigLIP) dominates zero-shot retrieval over
+image-only self-supervision (DINOv2, I-JEPA), supervised
+classification (ImageNet ViT), and random initialisation. Across
+the six encoders, alignment with text encoders rank-correlates
+with retrieval performance at Spearman $\rho = 0.83$, supporting
+the Platonic Representation Hypothesis on this domain.
+Fine-tuning DINOv2 with the SALAD aggregator on 50\,k pages
+reaches R@10 $=$~0.915, exceeding zero-shot CLIP, but introduces a
+universal pathology: the fine-tuned model overweights the title
+region, dropping in-distribution Protocol-A R@10 by up to 0.29
+under blanking while \emph{improving} cross-set Phase-2 R@1 by up
+to $6.7\times$. Zero-shot CLIP and SigLIP show the opposite sign
+under the same blanking, falsifying the simple title-OCR
+explanation for their zero-shot edge, and a linear adapter to BERT
+space recovers latent text structure in I-JEPA that is invisible
+zero-shot (R@10 $0.015\!\to\!0.197$).
+
+Re-running the grid under the Native Legible Protocol --- crops at
+native pixel scale, so body text is actually readable --- shows
+the family ordering is not an artifact of illegibility: contrastive
+encoders still dominate and image-only encoders remain near the
+floor. Against a perfect-text ceiling of R@10 $=$~0.938, zero-shot
+CLIP (0.736) already matches the BERT[CLS] readout of the
+ground-truth text (0.747), so the remaining headroom is reading
+quality rather than layout exploitation. Frozen MAE, the weakest
+encoder ($0.036 \approx$ random), can be taught to read: CLS
+regression collapses to the target centroid, but an InfoNCE
+objective against BERT-body anchors restores genuine page
+separation (0.098), and random title-masking during fine-tuning
+yields the best reader (0.143) while guarding against the title
+shortcut. At legible resolution the title-blanking intervention
+\emph{helps} every encoder and both trained readers, indicating
+the Phase-1 layout-fingerprint pathology is a property of
+illegible inputs rather than of fine-tuning itself.
+
+Two legible-resolution findings round out the picture:
+document-pretrained encoders (Nougat, Pix2Struct) sit at the SSL
+floor (R@10 0.049--0.054), so reading-oriented pretraining alone
+does not yield retrieval; and a text-target I-JEPA with a SALAD head
+reaches R@10 $=$~0.583 (a $38\times$ lift over zero-shot), the higher
+$490{\to}224$ figure (0.704) reflecting resolution-protocol inflation
+rather than better reading.
+
+\section*{Acknowledgements}
+We thank the COMP547 course staff for their guidance throughout the
+project, and Ko\c{c} University's high-performance computing cluster
+for the GPU resources used in all experiments.
+
+\section*{Author Contributions}
+Both authors contributed equally to this work. They jointly
+formulated the research questions, designed the
+crop$\rightarrow$page evaluation protocol and shared infrastructure,
+and wrote the paper. Individual leads were as follows.
+\textbf{Halil \.{I}brahim Kanpak} led the Native Legible Protocol
+and text-aware cropper, the re-baselined cross-model grid
+(including MAE) with page-level re-identification scoring, the MAE
+reader (the regression-collapse diagnosis, the InfoNCE fix, and
+title-mask augmentation), the perfect-text upper bound, the
+attention ``where it reads'' analysis, the legible-resolution
+confound-control experiments, and the document-pretrained family
+evaluation. \textbf{Bar\i{}\c{s} Cem Bakay} led the text-target
+I-JEPA pretraining and the image-only and text-target ViT-H/14
+backbones, the I-JEPA head fine-tunes (MLP and SALAD), the Phase-1
+zero-shot and fine-tuning grids, the Platonic alignment analysis,
+the LEACE causal title-erasure, the adapter capacity sweeps, and the
+ColPali late-interaction comparison.
+
+\bibliography{visword_report}
+\bibliographystyle{comp547}
+
+\appendix
+\section{Additional Phase-1 Analyses}
+\label{sec:appendix}
+
+\subsection{Vision-to-vision adapter capacity}
+\label{sec:adapter_vv}
 
 \begin{table}[t]
-\caption{Protocol-A R@10 with the top 15\,\% of every page painted
-white before cropping (b-15) versus the original eval (orig.).
-Top block: zero-shot encoders. Bottom block: fine-tuned checkpoints.
-Sign of $\Delta$ is the central observation: zero-shot CLIP/SigLIP
-\emph{gain} from blanking (negative confound removed); trained
-DINOv2 \emph{loses} substantially (the model learned to depend on
-the title region).}
-\label{tab:blank_protA}
+\caption{Protocol-A Phase 1 R@10 for the frozen-backbone vision-to-vision adapter grid. Backbones are frozen, and only the adapter head is trained for 3 epochs. CLIP fails completely due to lack of local variance, whereas DINOv2 and I-JEPA perform best with a simple linear adapter.}
+\label{tab:adapter_vv}
 \centering
 \small
 \begin{tabular}{lccc}
 \toprule
-Encoder & orig.\ R@10 & b-15 R@10 & $\Delta$ \\
+Backbone & Linear & MLP & Bottleneck \\
 \midrule
-\rowcolor{cITC} CLIP zero-shot         & 0.779 & 0.852 & $+0.073$ \\
-\rowcolor{cITC} SigLIP zero-shot       & 0.624 & 0.731 & $+0.106$ \\
-\rowcolor{cSSL} DINOv2 zero-shot       & 0.058 & 0.058 & $-0.000$ \\
-\rowcolor{cSSL} I-JEPA zero-shot       & 0.015 & 0.012 & $-0.003$ \\
-\rowcolor{cSUP} ImageNet zero-shot     & 0.031 & 0.032 & $+0.001$ \\
-\rowcolor{cRND} Plain-ViT zero-shot    & 0.029 & 0.030 & $+0.001$ \\
-\midrule
-\rowcolor{cFT}  DINOv2-MLP-30k         & 0.787 & 0.494 & $-0.292$ \\
-\rowcolor{cFT}  DINOv2-SALAD-30k       & 0.880 & 0.720 & $-0.161$ \\
-\rowcolor{cFT}  DINOv2-SALAD-50k       & 0.915 & 0.673 & $-0.242$ \\
-\rowcolor{cFT}  CLIP-SALAD-30k         & 0.724 & 0.687 & $-0.037$ \\
+\rowcolor{cSSL} DINOv2 & \textbf{0.229} & 0.207 & 0.184 \\
+\rowcolor{cSSL} I-JEPA & 0.180 & 0.157 & 0.146 \\
+\rowcolor{cITC} CLIP   & 0.003 & 0.003 & 0.003 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\begin{table}[t]
-\caption{Phase-2 cross-set R@1 with the top fraction of every
-anchor and pool image painted white. The same fine-tuned
-checkpoints that lose Protocol-A R@10 under blanking
-(Table~\ref{tab:blank_protA}) \emph{gain} Phase-2 R@1 by the same
-information removal. CLIP+MLP-30k embeddings collapsed; all
-predictions are identical.}
-\label{tab:blank_phase2}
-\centering
-\small
-\begin{tabular}{lccc}
-\toprule
-Run & orig.\ R@1 & b-15 R@1 & b-30 R@1 \\
-\midrule
-\rowcolor{cFT} DINOv2-MLP-30k     & 0.169 & 0.712 & 0.763 \\
-\rowcolor{cFT} DINOv2-SALAD-30k   & 0.212 & 0.686 & 0.737 \\
-\rowcolor{cFT} DINOv2-SALAD-50k   & 0.110 & 0.661 & 0.737 \\
-\rowcolor{cFT} CLIP-SALAD-30k     & 0.551 & 0.686 & 0.720 \\
-\rowcolor{cFT} CLIP-MLP-30k$^\dagger$ & 0.932 & 0.932 & 0.932 \\
-\bottomrule
-\multicolumn{4}{l}{\footnotesize $^\dagger$~Collapsed model.}
-\end{tabular}
-\end{table}
-
-We re-encode the same 2\,000-page eval slice with the top 15\,\%
-(and 30\,\%) painted white. Three signs emerge.
-Zero-shot CLIP and SigLIP \emph{improve} under blanking ($+0.073$
-and $+0.106$ R@10); image-only encoders move by $\le 0.003$. This
-falsifies the H-OCR explanation for CLIP's zero-shot edge --- the
-title acts as a low-information template common to every page, and
-removing it yields cleaner content-driven matches.
-Fine-tuned DINOv2 \emph{loses} heavily ($-0.16$ to $-0.29$ R@10);
-the 50\,k checkpoint falls from 0.915 to 0.673. CLIP+SALAD moves
-only $-0.037$. Fine-tuning has taught DINOv2 to bind page identity
-to the title-bearing top region.
-Phase-2 reverses the sign on the same checkpoints
-(Table~\ref{tab:blank_phase2}): the title-region features that
-help in-distribution Protocol-A are the same confound that hurts
-cross-set transfer, with up to $6.7\times$ R@1 improvement under
-30\,\% blanking. The encoder is not unable to read the body region;
-it is that the title is so reliably informative on Wikipedia that
-the model bypasses the body. Random title-region masking during
-training is the obvious mitigation.
+To isolate the effect of adapter capacity from backbone fine-tuning, we sweep linear, MLP, and bottleneck heads over frozen backbones (Table~\ref{tab:adapter_vv}). We observe that CLIP completely collapses to a constant representation (R@10 $\approx 0.003$) regardless of adapter capacity, stemming from its lack of fine-grained patch variance on document crops. Conversely, DINOv2 and I-JEPA learn meaningful projections, with the simplest linear adapter yielding the best performance (0.229 for DINOv2), suggesting that higher-capacity heads overfit the frozen visual features.
 
 \subsection{Text adapter capacity sweep}
 \label{sec:adapter}
@@ -941,93 +1002,82 @@ erase; fine-tuning on a single visual corpus spreads the analogous
 binding across an order-of-magnitude wider subspace of the 8\,448-d
 SALAD descriptor.
 
-\section{Discussion and Limitations}
-\label{sec:disc}
 
-All training uses a single random seed. The cross-family
-ordering is large enough to read past seed noise (closest gap
-$\Delta$R@10 $=0.093$, well outside typical jitter), but
-within-family comparisons (CLIP-SALAD vs.\ CLIP-MLP) need
-multi-seed reruns. Pool size $P{=}2000$ is small versus industrial
-$10^5$--$10^6$; numbers are within-table comparable, not cross-paper.
-Under the original $490{\to}224$ protocol, body text is sub-pixel,
-so ``reading'' there means heading-level text plus layout, not
-fluent content; the Native Legible Protocol
-(\S\ref{sec:native_legible}) removes this confound, but at a cost:
-tiling pages into native-scale crops ($\sim$21.8 per page versus
-4.0) multiplies encoding cost and sacrifices global page context,
-since no single crop sees the whole layout. All training and
-evaluation use Wikipedia screenshots, which share one clean,
-consistent template; generalisation to noisy, multi-column, or
-scanned documents (e.g.\ arXiv PDFs) is untested. The I-JEPA
-adapter R@10 $=$~0.197 is evidence of latent alignment, not a
-practical recipe; matching CLIP-level retrieval would need a
-non-linear adapter and larger paired-data training. Likewise the
-MAE reader's 0.143 demonstrates that a non-reader backbone can be
-taught genuine page separation, not that it is competitive with
-contrastively pretrained encoders.
+\subsection{Title-region ablation}
 
-\section{Conclusion}
-\label{sec:conclusions}
+\begin{table}[t]
+\caption{Protocol-A R@10 with the top 15\,\% of every page painted
+white before cropping (b-15) versus the original eval (orig.).
+Top block: zero-shot encoders. Bottom block: fine-tuned checkpoints.
+Sign of $\Delta$ is the central observation: zero-shot CLIP/SigLIP
+\emph{gain} from blanking (negative confound removed); trained
+DINOv2 \emph{loses} substantially (the model learned to depend on
+the title region).}
+\label{tab:blank_protA}
+\centering
+\small
+\begin{tabular}{lccc}
+\toprule
+Encoder & orig.\ R@10 & b-15 R@10 & $\Delta$ \\
+\midrule
+\rowcolor{cITC} CLIP zero-shot         & 0.779 & 0.852 & $+0.073$ \\
+\rowcolor{cITC} SigLIP zero-shot       & 0.624 & 0.731 & $+0.106$ \\
+\rowcolor{cSSL} DINOv2 zero-shot       & 0.058 & 0.058 & $-0.000$ \\
+\rowcolor{cSSL} I-JEPA zero-shot       & 0.015 & 0.012 & $-0.003$ \\
+\rowcolor{cSUP} ImageNet zero-shot     & 0.031 & 0.032 & $+0.001$ \\
+\rowcolor{cRND} Plain-ViT zero-shot    & 0.029 & 0.030 & $+0.001$ \\
+\midrule
+\rowcolor{cFT}  DINOv2-MLP-30k         & 0.787 & 0.494 & $-0.292$ \\
+\rowcolor{cFT}  DINOv2-SALAD-30k       & 0.880 & 0.720 & $-0.161$ \\
+\rowcolor{cFT}  DINOv2-SALAD-50k       & 0.915 & 0.673 & $-0.242$ \\
+\rowcolor{cFT}  CLIP-SALAD-30k         & 0.724 & 0.687 & $-0.037$ \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-We compared six image encoders trained with five distinct
-pretraining objectives on a leak-free crop$\rightarrow$page
-retrieval task over Wikipedia screenshots. Image--text contrastive
-pretraining (CLIP, SigLIP) dominates zero-shot retrieval over
-image-only self-supervision (DINOv2, I-JEPA), supervised
-classification (ImageNet ViT), and random initialisation. Across
-the six encoders, alignment with text encoders rank-correlates
-with retrieval performance at Spearman $\rho = 0.83$, supporting
-the Platonic Representation Hypothesis on this domain.
-Fine-tuning DINOv2 with the SALAD aggregator on 50\,k pages
-reaches R@10 $=$~0.915, exceeding zero-shot CLIP, but introduces a
-universal pathology: the fine-tuned model overweights the title
-region, dropping in-distribution Protocol-A R@10 by up to 0.29
-under blanking while \emph{improving} cross-set Phase-2 R@1 by up
-to $6.7\times$. Zero-shot CLIP and SigLIP show the opposite sign
-under the same blanking, falsifying the simple title-OCR
-explanation for their zero-shot edge. A 1280$\times$768 linear
-adapter trained on (image, BERT-title) pairs lifts I-JEPA from
-near-chance to R@10 $=$~0.197, indicating image-only predictive
-features encode latent text-aligned structure that is not
-zero-shot accessible but is recoverable by a low-capacity linear
-projection.
+\begin{table}[t]
+\caption{Phase-2 cross-set R@1 with the top fraction of every
+anchor and pool image painted white. The same fine-tuned
+checkpoints that lose Protocol-A R@10 under blanking
+(Table~\ref{tab:blank_protA}) \emph{gain} Phase-2 R@1 by the same
+information removal. CLIP+MLP-30k embeddings collapsed; all
+predictions are identical.}
+\label{tab:blank_phase2}
+\centering
+\small
+\begin{tabular}{lccc}
+\toprule
+Run & orig.\ R@1 & b-15 R@1 & b-30 R@1 \\
+\midrule
+\rowcolor{cFT} DINOv2-MLP-30k     & 0.169 & 0.712 & 0.763 \\
+\rowcolor{cFT} DINOv2-SALAD-30k   & 0.212 & 0.686 & 0.737 \\
+\rowcolor{cFT} DINOv2-SALAD-50k   & 0.110 & 0.661 & 0.737 \\
+\rowcolor{cFT} CLIP-SALAD-30k     & 0.551 & 0.686 & 0.720 \\
+\rowcolor{cFT} CLIP-MLP-30k$^\dagger$ & 0.932 & 0.932 & 0.932 \\
+\bottomrule
+\multicolumn{4}{l}{\footnotesize $^\dagger$~Collapsed model.}
+\end{tabular}
+\end{table}
 
-Re-running the grid under the Native Legible Protocol --- crops at
-native pixel scale, so body text is actually readable --- shows
-the family ordering is not an artifact of illegibility: contrastive
-encoders still dominate and image-only encoders remain near the
-floor. Against a perfect-text ceiling of R@10 $=$~0.938, zero-shot
-CLIP (0.736) already matches the BERT[CLS] readout of the
-ground-truth text (0.747), so the remaining headroom is reading
-quality rather than layout exploitation. Frozen MAE, the weakest
-encoder ($0.036 \approx$ random), can be taught to read: CLS
-regression collapses to the target centroid, but an InfoNCE
-objective against BERT-body anchors restores genuine page
-separation (0.098), and random title-masking during fine-tuning
-yields the best reader (0.143) while guarding against the title
-shortcut. At legible resolution the title-blanking intervention
-\emph{helps} every encoder and both trained readers, indicating
-the Phase-1 layout-fingerprint pathology is a property of
-illegible inputs rather than of fine-tuning itself.
+We re-encode the same 2\,000-page eval slice with the top 15\,\%
+(and 30\,\%) painted white. Three signs emerge.
+Zero-shot CLIP and SigLIP \emph{improve} under blanking ($+0.073$
+and $+0.106$ R@10); image-only encoders move by $\le 0.003$. This
+falsifies the H-OCR explanation for CLIP's zero-shot edge --- the
+title acts as a low-information template common to every page, and
+removing it yields cleaner content-driven matches.
+Fine-tuned DINOv2 \emph{loses} heavily ($-0.16$ to $-0.29$ R@10);
+the 50\,k checkpoint falls from 0.915 to 0.673. CLIP+SALAD moves
+only $-0.037$. Fine-tuning has taught DINOv2 to bind page identity
+to the title-bearing top region.
+Phase-2 reverses the sign on the same checkpoints
+(Table~\ref{tab:blank_phase2}): the title-region features that
+help in-distribution Protocol-A are the same confound that hurts
+cross-set transfer, with up to $6.7\times$ R@1 improvement under
+30\,\% blanking. The encoder is not unable to read the body region;
+it is that the title is so reliably informative on Wikipedia that
+the model bypasses the body. Random title-region masking during
+training is the obvious mitigation.
 
-Two additional findings emerge from the legible-resolution evaluation.
-First, document-pretrained encoders specifically designed to read
-(Nougat, Pix2Struct) cluster at the image-only SSL floor (R@10
-0.049--0.054), far below CLIP and SigLIP, indicating that
-OCR-style and masked-screenshot-reconstruction pretraining objectives
-do not generalise to same-page retrieval without a retrieval
-contrastive fine-tuning stage. Second, I-JEPA with a text-target
-backbone and SALAD aggregator reaches R@10 $=$~0.583 at legible
-490$\times$490 resolution --- a $38\times$ lift over zero-shot
-I-JEPA (0.015). Comparing against the same model at downsampled
-$490{\to}224$ resolution (R@10 0.704) reveals a systematic
-\emph{resolution-protocol inflation}: at coarser resolution, layout
-fingerprints and heading shortcuts inflate recall, and the
-evaluation at legible resolution is a harder and more honest
-probe of reading ability.
-
-\bibliography{visword_report}
-\bibliographystyle{comp547}
 
 \end{document}
