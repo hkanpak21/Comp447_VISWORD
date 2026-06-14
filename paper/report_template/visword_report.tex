@@ -24,6 +24,10 @@
 \definecolor{cRND}{HTML}{ECECEC}    % random init
 \definecolor{cFT}{HTML}{FFF1C2}     % fine-tuned (yellowish)
 
+% Tighten inter-column padding so wide result tables fit a single
+% column without bleeding into the gutter / adjacent column.
+\setlength{\tabcolsep}{3.5pt}
+
 \begin{document}
 
 \twocolumn[
@@ -558,7 +562,7 @@ BERT (CLS)       & -- & 0.747 & $+0.176$ \\
 \small
 \begin{tabular}{lcccc}
 \toprule
-I-JEPA Variant & Zero-Shot & MLP & SALAD & gap (SALAD) \\
+I-JEPA Variant & Zero-Shot & MLP & SALAD & gap \\
 \midrule
 \rowcolor{cSSL} Image-Only & 0.015 & 0.525 & (running) & -- \\
 \rowcolor{cSSL} Text-Target & 0.029 & 0.526 & \textbf{0.583} & $+0.248$ \\
@@ -966,13 +970,14 @@ feature space). Last column: explained variance of the rank-1 PCA.}
 \small
 \begin{tabular}{lcccc}
 \toprule
-Encoder & R@10 orig & R@10 blank & R@10 LEACE & expl.\,var \\
+Encoder & orig & blank & LEACE & expl.\,var \\
 \midrule
-\rowcolor{cITC} CLIP zero-shot           & 0.779 & 0.823 & \textbf{0.863} & 0.25 \\
-\rowcolor{cITC} SigLIP zero-shot         & 0.611 & 0.716 & \textbf{0.775} & 0.35 \\
-\rowcolor{cSSL} DINOv2 zero-shot         & 0.058 & 0.056 & 0.068          & 0.76 \\
-\rowcolor{cFT}  DINOv2-SALAD-50k trained & 0.911 & 0.670 & 0.912          & 0.20 \\
+\rowcolor{cITC} CLIP zero-shot       & 0.779 & 0.823 & \textbf{0.863} & 0.25 \\
+\rowcolor{cITC} SigLIP zero-shot     & 0.611 & 0.716 & \textbf{0.775} & 0.35 \\
+\rowcolor{cSSL} DINOv2 zero-shot     & 0.058 & 0.056 & 0.068          & 0.76 \\
+\rowcolor{cFT}  DINOv2-SALAD-50k     & 0.911 & 0.670 & 0.912          & 0.20 \\
 \bottomrule
+\multicolumn{5}{l}{\footnotesize R@10 columns: original / title-blanked / rank-1 LEACE-erased.}
 \end{tabular}
 \end{table}
 
