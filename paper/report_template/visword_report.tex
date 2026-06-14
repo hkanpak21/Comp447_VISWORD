@@ -164,8 +164,20 @@ legible resolution.
 \section{Related Work}
 \label{sec:related}
 
-\textbf{Pixel-based language models and document AI.} PIXEL
-\cite{rust2023pixel}, CLIPPO \cite{tschannen2023clippo} and
+Vision-language alignment and document reading models span several
+paradigms, which we contextualise below.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/Benchmark.pdf}
+\caption{Anchor-pool benchmark (Phase 2). Each anchor crop is
+encoded with the vision encoder and ranked against a small pool
+($\sim$7 images) of positives (other crops of the same page) and
+hard negatives (crops of unrelated pages).}
+\label{fig:bench}
+\end{figure}
+
+PIXEL \cite{rust2023pixel}, CLIPPO \cite{tschannen2023clippo} and
 Pix2Struct \cite{lee2023pix2struct} all train transformers on
 rendered text and demonstrate that pixel inputs can match or exceed
 tokenised text on downstream tasks. ColPali
@@ -234,6 +246,21 @@ training minimises a multi-similarity contrastive loss
 \label{fig:train}
 \end{figure}
 
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.92\textwidth]{figures/ijepa_text_target_arch.png}
+\caption{Text-target I-JEPA pretraining. A frozen BERT text encoder
+maps the page body text to per-token embeddings (the prediction
+target). The I-JEPA context visual encoder (ViT-H/14) encodes the
+unmasked screenshot patches; a transformer predictor, conditioned on
+1-D learnable mask tokens and 2-D positional embeddings, predicts the
+BERT token embeddings of the masked region. The objective is a masked
+Smooth-L1 comparison between predicted and ground-truth text
+embeddings; the image-only baseline instead predicts masked
+image-patch latents.}
+\label{fig:texttarget}
+\end{figure*}
+
 \subsection{Training (fine-tunes)}
 \label{sec:training}
 
@@ -253,16 +280,6 @@ descriptor. Only the head and the last four ViT blocks are
 trainable. Fine-tunes use 30\,000 training pages $\times$ 3 epochs
 (5\,625 optimiser steps), one seed; the saturation
 diagnostic uses 50\,000 pages.
-
-\begin{figure}[t]
-\centering
-\includegraphics[width=\columnwidth]{figures/Benchmark.pdf}
-\caption{Anchor-pool benchmark (Phase 2). Each anchor crop is
-encoded with the vision encoder and ranked against a small pool
-($\sim$7 images) of positives (other crops of the same page) and
-hard negatives (crops of unrelated pages).}
-\label{fig:bench}
-\end{figure}
 
 \subsection{Text-target I-JEPA}
 \label{sec:texttarget}
@@ -286,21 +303,6 @@ ViT-H/14 blocks unfrozen, so the sole difference is image-latent
 vs.\ text-embedding targets. This isolates whether predicting the
 \emph{meaning} of rendered text, rather than image structure,
 yields representations that read.
-
-\begin{figure*}[t]
-\centering
-\includegraphics[width=0.92\textwidth]{figures/ijepa_text_target_arch.png}
-\caption{Text-target I-JEPA pretraining. A frozen BERT text encoder
-maps the page body text to per-token embeddings (the prediction
-target). The I-JEPA context visual encoder (ViT-H/14) encodes the
-unmasked screenshot patches; a transformer predictor, conditioned on
-1-D learnable mask tokens and 2-D positional embeddings, predicts the
-BERT token embeddings of the masked region. The objective is a masked
-Smooth-L1 comparison between predicted and ground-truth text
-embeddings; the image-only baseline instead predicts masked
-image-patch latents.}
-\label{fig:texttarget}
-\end{figure*}
 
 \subsection{Text encoder specification}
 \label{sec:bert}
@@ -384,6 +386,30 @@ directly in \S\ref{sec:results}.
 
 \subsection{Zero-shot retrieval}
 
+Table~\ref{tab:zeroshot} reports zero-shot Protocol-A. CLIP
+dominates at R@10 $=$~0.779, SigLIP follows at 0.624, and the four
+image-only encoders cluster near random (R@10 $=$~0.015--0.058).
+Three observations follow:
+
+(i) The largest gap is between the image--text contrastive and
+the image-only families ($\Delta$R@10 $\approx 0.57$), not between
+encoders within a family. The supervised ImageNet ViT scores 0.031
+versus 0.029 for the random-init plain ViT, so ImageNet
+classification supervision adds essentially nothing for this task.
+
+(ii) I-JEPA scores R@10~$=$~0.015, \emph{below} the random-init
+plain ViT (0.029). Despite ViT-H/14 being roughly 5$\times$ larger
+than the ViT-B encoders, image-only predictive pretraining
+out-of-the-box does not transfer to visual document retrieval.
+Q2's optimistic reading is therefore falsified at the zero-shot
+level: a post-hoc text adapter (\S\ref{sec:disc}) is the only
+remaining path to rescue I-JEPA.
+
+(iii) The CLIP--SigLIP gap (0.155) is real but small relative to
+the CLIP--DINOv2 gap (0.721). The dominant predictor is whether
+the encoder saw paired image--text data, not the specific
+contrastive form (softmax vs.\ sigmoid).
+
 \begin{table}[t]
 \caption{Protocol-A zero-shot retrieval at $P=2000$. Random R@1
 $=5\times 10^{-4}$. Encoder rows are coloured by pretraining family:
@@ -409,30 +435,6 @@ Encoder & R@1 & R@5 & R@10 & R@20 & gap \\
 \bottomrule
 \end{tabular}
 \end{table}
-
-Table~\ref{tab:zeroshot} reports zero-shot Protocol-A. CLIP
-dominates at R@10 $=$~0.779, SigLIP follows at 0.624, and the four
-image-only encoders cluster near random (R@10 $=$~0.015--0.058).
-Three observations follow:
-
-(i) The largest gap is between the image--text contrastive and
-the image-only families ($\Delta$R@10 $\approx 0.57$), not between
-encoders within a family. The supervised ImageNet ViT scores 0.031
-versus 0.029 for the random-init plain ViT, so ImageNet
-classification supervision adds essentially nothing for this task.
-
-(ii) I-JEPA scores R@10~$=$~0.015, \emph{below} the random-init
-plain ViT (0.029). Despite ViT-H/14 being roughly 5$\times$ larger
-than the ViT-B encoders, image-only predictive pretraining
-out-of-the-box does not transfer to visual document retrieval.
-Q2's optimistic reading is therefore falsified at the zero-shot
-level: a post-hoc text adapter (\S\ref{sec:disc}) is the only
-remaining path to rescue I-JEPA.
-
-(iii) The CLIP--SigLIP gap (0.155) is real but small relative to
-the CLIP--DINOv2 gap (0.721). The dominant predictor is whether
-the encoder saw paired image--text data, not the specific
-contrastive form (softmax vs.\ sigmoid).
 
 \subsection{Fine-tuning}
 
@@ -829,7 +831,6 @@ zero-shot and fine-tuning grids, the Platonic alignment analysis,
 the LEACE causal title-erasure, the adapter capacity sweeps, and the
 ColPali late-interaction comparison.
 
-\clearpage
 \bibliography{visword_report}
 \bibliographystyle{comp547}
 
