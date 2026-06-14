@@ -262,6 +262,44 @@ hard negatives (crops of unrelated pages).}
 \label{fig:bench}
 \end{figure}
 
+\subsection{Text-target I-JEPA}
+\label{sec:texttarget}
+
+Our central architectural probe replaces I-JEPA's image-latent
+prediction target with a cross-modal one
+(Figure~\ref{fig:texttarget}). A context encoder (ViT-H/14) sees
+only the unmasked patches of a page screenshot, with 2-D positional
+embeddings. A lightweight transformer predictor (depth 6,
+embedding dim 384) receives the context tokens together with
+learnable mask-query tokens carrying 1-D positional embeddings over
+text positions, and predicts the per-token embeddings of a frozen
+\texttt{bert-base-uncased} encoder (\S\ref{sec:bert}) applied to the
+page \emph{body} text. Training minimises a masked Smooth-L1 loss
+between the predicted and true BERT token embeddings (padding tokens
+excluded). The image-only baseline is identical except its target is
+the latent representation of masked \emph{image} blocks (standard
+I-JEPA \cite{assran2023ijepa}); both are pretrained on 90\,k
+Wikipedia screenshots at native 490$\times$490 with all 32
+ViT-H/14 blocks unfrozen, so the sole difference is image-latent
+vs.\ text-embedding targets. This isolates whether predicting the
+\emph{meaning} of rendered text, rather than image structure,
+yields representations that read.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.92\textwidth]{figures/ijepa_text_target_arch.png}
+\caption{Text-target I-JEPA pretraining. A frozen BERT text encoder
+maps the page body text to per-token embeddings (the prediction
+target). The I-JEPA context visual encoder (ViT-H/14) encodes the
+unmasked screenshot patches; a transformer predictor, conditioned on
+1-D learnable mask tokens and 2-D positional embeddings, predicts the
+BERT token embeddings of the masked region. The objective is a masked
+Smooth-L1 comparison between predicted and ground-truth text
+embeddings; the image-only baseline instead predicts masked
+image-patch latents.}
+\label{fig:texttarget}
+\end{figure*}
+
 \subsection{Text encoder specification}
 \label{sec:bert}
 
