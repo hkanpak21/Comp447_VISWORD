@@ -115,17 +115,6 @@ To systematically investigate whether and how these encoders acquire document an
 Vision-language alignment and document reading models span several
 paradigms, which we contextualise below.
 
-\setcounter{figure}{2}
-\begin{figure}[t]
-\centering
-\includegraphics[width=\columnwidth]{figures/Benchmark.pdf}
-\caption{Anchor-pool benchmark (Phase 2). Each anchor crop is
-encoded with the vision encoder and ranked against a small pool
-($\sim$7 images) of positives (other crops of the same page) and
-hard negatives (crops of unrelated pages).}
-\label{fig:bench}
-\end{figure}
-
 \textbf{Pixel-based language models and visual document AI.}
 PIXEL \cite{rust2023pixel}, CLIPPO \cite{tschannen2023clippo} and
 Pix2Struct \cite{lee2023pix2struct} all train transformers on
@@ -184,21 +173,6 @@ layout structure remain visually recoverable. ``Reading'' in this
 paper therefore refers to heading-level text and visual layout, not
 fluent body content.
 
-\begin{figure*}[t]
-\centering
-\includegraphics[width=0.92\textwidth]{figures/ijepa_text_target_arch.png}
-\caption{Text-target I-JEPA pretraining. A frozen BERT text encoder
-maps the page body text to per-token embeddings (the prediction
-target). The I-JEPA context visual encoder (ViT-H/14) encodes the
-unmasked screenshot patches; a transformer predictor, conditioned on
-1-D learnable mask tokens and 2-D positional embeddings, predicts the
-BERT token embeddings of the masked region. The objective is a masked
-Smooth-L1 comparison between predicted and ground-truth text
-embeddings; the image-only baseline instead predicts masked
-image-patch latents.}
-\label{fig:texttarget}
-\end{figure*}
-
 \subsection{Training (fine-tunes)}
 \label{sec:training}
 
@@ -219,7 +193,6 @@ trainable. Fine-tunes use 30\,000 training pages $\times$ 3 epochs
 (5\,625 optimiser steps), one seed; the saturation
 diagnostic uses 50\,000 pages.
 
-\setcounter{figure}{1}
 \begin{figure}[t]
 \centering
 \includegraphics[width=\columnwidth]{figures/Training.pdf}
@@ -231,7 +204,16 @@ training minimises a multi-similarity contrastive loss
 (of twelve) and train a head on top.}
 \label{fig:train}
 \end{figure}
-\setcounter{figure}{4}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/Benchmark.pdf}
+\caption{Anchor-pool benchmark (Phase 2). Each anchor crop is
+encoded with the vision encoder and ranked against a small pool
+($\sim$7 images) of positives (other crops of the same page) and
+hard negatives (crops of unrelated pages).}
+\label{fig:bench}
+\end{figure}
 
 \subsection{Text-target I-JEPA}
 \label{sec:texttarget}
@@ -255,6 +237,21 @@ ViT-H/14 blocks unfrozen, so the sole difference is image-latent
 vs.\ text-embedding targets. This isolates whether predicting the
 \emph{meaning} of rendered text, rather than image structure,
 yields representations that read.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.92\textwidth]{figures/ijepa_text_target_arch.png}
+\caption{Text-target I-JEPA pretraining. A frozen BERT text encoder
+maps the page body text to per-token embeddings (the prediction
+target). The I-JEPA context visual encoder (ViT-H/14) encodes the
+unmasked screenshot patches; a transformer predictor, conditioned on
+1-D learnable mask tokens and 2-D positional embeddings, predicts the
+BERT token embeddings of the masked region. The objective is a masked
+Smooth-L1 comparison between predicted and ground-truth text
+embeddings; the image-only baseline instead predicts masked
+image-patch latents.}
+\label{fig:texttarget}
+\end{figure*}
 
 \subsection{Text encoder specification}
 \label{sec:bert}
@@ -353,9 +350,10 @@ classification supervision adds essentially nothing for this task.
 plain ViT (0.029). Despite ViT-H/14 being roughly 5$\times$ larger
 than the ViT-B encoders, image-only predictive pretraining
 out-of-the-box does not transfer to visual document retrieval.
-Q2's optimistic reading is therefore falsified at the zero-shot
-level: a post-hoc text adapter (\S\ref{sec:disc}) is the only
-remaining path to rescue I-JEPA.
+The hypothesis that image-only predictive pretraining implicitly
+acquires text-retrievable linguistic structure is therefore
+falsified at the zero-shot level: a post-hoc text adapter
+(\S\ref{sec:disc}) is the only remaining path to rescue I-JEPA.
 
 (iii) The CLIP--SigLIP gap (0.155) is real but small relative to
 the CLIP--DINOv2 gap (0.721). The dominant predictor is whether
@@ -390,6 +388,14 @@ Encoder & R@1 & R@5 & R@10 & R@20 & gap \\
 
 \subsection{Fine-tuning}
 
+Table~\ref{tab:finetune} reports the fine-tuned grid.
+DINOv2~+~SALAD on 30\,k pages reaches R@10~$=$~0.880 and on 50\,k
+pages reaches 0.915, exceeding zero-shot CLIP (0.779). The MLP
+head on the same DINOv2 backbone scores 0.787, so the SALAD
+aggregator contributes $+9.3$\,pp R@10 over an MLP at the matched
+backbone --- consistent with the prior place-recognition result of
+\cite{izquierdo2024salad}.
+
 \begin{table}[t]
 \caption{Protocol-A retrieval after last-4-block fine-tuning, single
 seed. ``$\Delta$ZS'' is R@10 minus the encoder's zero-shot baseline.
@@ -411,14 +417,6 @@ Encoder + head & R@1 & R@10 & $\Delta$ZS \\
 a constant.}
 \end{tabular}
 \end{table}
-
-Table~\ref{tab:finetune} reports the fine-tuned grid.
-DINOv2~+~SALAD on 30\,k pages reaches R@10~$=$~0.880 and on 50\,k
-pages reaches 0.915, exceeding zero-shot CLIP (0.779). The MLP
-head on the same DINOv2 backbone scores 0.787, so the SALAD
-aggregator contributes $+9.3$\,pp R@10 over an MLP at the matched
-backbone --- consistent with the prior place-recognition result of
-\cite{izquierdo2024salad}.
 
 CLIP fine-tuning at the conservative $\eta_{\text{bb}}=10^{-7}$
 hurts more than it helps. CLIP+SALAD loses 5.5\,pp R@10 from its
@@ -686,6 +684,35 @@ representations on the same content. The Platonic Hypothesis is
 supported in this domain: encoders close to the text-encoder
 geometry retrieve text-heavy visual documents better.
 
+\subsection{LEACE causal title-erasure}
+\label{sec:leace}
+
+Pixel-blanking is correlational. We isolate the
+\emph{title-direction} in feature space and erase it surgically:
+the rank-1 PCA projection of the per-crop deltas serves as a 1-d
+protected attribute for the LEACE eraser. Table~\ref{tab:leace}
+(in the Appendix) reports the result.
+
+For both image-text contrastive encoders, LEACE-erasing a single
+linear axis raises retrieval \emph{more} than the pixel
+intervention: CLIP $+0.084$ vs $+0.044$, SigLIP $+0.164$ vs $+0.105$.
+The title-direction's dominant axis carries enough of the encoder's
+confounding signal that surgical removal beats the physical one.
+Zero-shot DINOv2 is unmoved by either: the title direction barely
+exists as a structured axis in its feature space.
+
+Trained DINOv2-SALAD-50k splits the analysis. Pixel-blanking drops
+its R@10 from 0.911 to 0.670 ($-0.241$), but rank-1 LEACE leaves
+retrieval untouched (0.912). A rank sweep
+$\{4, 16, 64, 256, 1024\}$ shows the title-region binding lives
+in a 16--64-dimensional subspace: rank-4 LEACE drops R@10 by
+$0.030$, rank-16 by $0.136$, rank-64 by $0.266$ (matching
+pixel-blanking), and rank-256 by $0.385$. Pretraining gives CLIP
+and SigLIP a clean low-rank title confound a single axis can
+erase; fine-tuning on a single visual corpus spreads the analogous
+binding across an order-of-magnitude wider subspace of the 8\,448-d
+SALAD descriptor.
+
 \section{Discussion and Limitations}
 \label{sec:disc}
 
@@ -837,9 +864,9 @@ Deep MLP ($h=2048$) & \textbf{0.219} & 0.637 \\
 \end{tabular}
 \end{table}
 
-Q2's zero-shot verdict (Table~\ref{tab:zeroshot}) is sharp: I-JEPA does not produce text-retrievable image representations out of the box. We test a softer version of Q2 --- do visual features encode latent text-aligned structure recoverable by post-hoc adapters of varying capacity? We sweep across linear, low rank, bottleneck, and MLP adapters mapping frozen I-JEPA (1280-d) and CLIP (768-d) features into BERT space (Table~\ref{tab:adapter}).
+The zero-shot evaluation (Table~\ref{tab:zeroshot}) is sharp: I-JEPA does not produce text-retrievable image representations out of the box. We test a softer formulation of this capability --- do visual features encode latent text-aligned structure recoverable by post-hoc adapters of varying capacity? We sweep across linear, low rank, bottleneck, and MLP adapters mapping frozen I-JEPA (1280-d) and CLIP (768-d) features into BERT space (Table~\ref{tab:adapter}).
 
-While CLIP completely failed at the pure vision-to-vision contrastive task due to collapsed variance on white document backgrounds, it excels at predicting BERT text embeddings, jumping to $\sim$0.717 R@10. This is because CLIP's visual backbone was explicitly pre-trained to align with text encoders. The simple linear or low-rank adapters are sufficient for CLIP to reach peak performance. In contrast, I-JEPA peaks at $\sim$0.219 R@10 and requires the highest capacity deep MLP adapter to do so. Because I-JEPA was trained via masked image modeling, its features require heavy non-linear transformations to align with text semantics.
+While CLIP completely failed at the pure vision-to-vision contrastive task due to collapsed variance on white backgrounds, it excels at predicting BERT text embeddings, reaching $\sim$0.717 R@10. This reflects CLIP's text-aligned pretraining, which allows simple linear or low-rank adapters to reach peak performance. In contrast, I-JEPA peaks at $\sim$0.219 R@10, with the simple linear adapter performing almost on par with the deep MLP (0.214 vs.\ 0.219), suggesting that increased adapter capacity provides negligible benefit for recovering latent text structure from image-only features.
 
 \subsection{Late interaction is not the bottleneck-breaker}
 \label{sec:colpali}
@@ -875,10 +902,6 @@ late-interaction stays at chance (within $0.01$ of single-vector
 DINOv2 at the same pool). Patch-level scoring does not rescue an
 encoder that lacks text-aligned features; the bottleneck is the
 encoder, not the aggregator.
-
-\subsection{LEACE causal title-erasure}
-\label{sec:leace}
-
 \begin{table}[t]
 \caption{Closed-form LEACE \cite{belrose2023leace} erasure of the
 rank-1 PCA projection of per-crop deltas
@@ -900,33 +923,6 @@ Encoder & orig & blank & LEACE & expl.\,var \\
 \multicolumn{5}{l}{\footnotesize R@10 columns: original / title-blanked / rank-1 LEACE-erased.}
 \end{tabular}
 \end{table}
-
-Pixel-blanking is correlational. We isolate the
-\emph{title-direction} in feature space and erase it surgically:
-the rank-1 PCA projection of the per-crop deltas serves as a 1-d
-protected attribute for the LEACE eraser. Table~\ref{tab:leace}
-reports the result.
-
-For both image-text contrastive encoders, LEACE-erasing a single
-linear axis raises retrieval \emph{more} than the pixel
-intervention: CLIP $+0.084$ vs $+0.044$, SigLIP $+0.164$ vs $+0.105$.
-The title-direction's dominant axis carries enough of the encoder's
-confounding signal that surgical removal beats the physical one.
-Zero-shot DINOv2 is unmoved by either: the title direction barely
-exists as a structured axis in its feature space.
-
-Trained DINOv2-SALAD-50k splits the analysis. Pixel-blanking drops
-its R@10 from 0.911 to 0.670 ($-0.241$), but rank-1 LEACE leaves
-retrieval untouched (0.912). A rank sweep
-$\{4, 16, 64, 256, 1024\}$ shows the title-region binding lives
-in a 16--64-dimensional subspace: rank-4 LEACE drops R@10 by
-$0.030$, rank-16 by $0.136$, rank-64 by $0.266$ (matching
-pixel-blanking), and rank-256 by $0.385$. Pretraining gives CLIP
-and SigLIP a clean low-rank title confound a single axis can
-erase; fine-tuning on a single visual corpus spreads the analogous
-binding across an order-of-magnitude wider subspace of the 8\,448-d
-SALAD descriptor.
-
 
 \subsection{Title-region ablation}
 
